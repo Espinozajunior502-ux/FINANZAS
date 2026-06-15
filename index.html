@@ -597,13 +597,45 @@ let editingId = null;
 let donutAnim = { frame: null, progress: 0 };
 let barsAnim  = { frame: null, progress: 0, data: [] };
 
-function load(){ try{ const r=localStorage.getItem(KEY); return r?JSON.parse(r):structuredClone(DEF); }catch(e){ return structuredClone(DEF); } }
+function load(){
+  try{
+    const r=localStorage.getItem(KEY);
+    return normalizeDb(r?JSON.parse(r):structuredClone(DEF));
+  }catch(e){
+    return structuredClone(DEF);
+  }
+}
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(db)); }catch(e){ toast('No se pudo guardar (modo preview). Descarga el archivo.'); } }
 
 const fmt = n => CUR+(Math.round(n*100)/100).toLocaleString('es-EC',{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmtShort = n => { if(n>=1000) return CUR+(n/1000).toFixed(1)+'k'; return CUR+Math.round(n); };
 const ym = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
 const monthName = d => d.toLocaleDateString('es-ES',{month:'long',year:'numeric'});
+
+function normalizeText(v){
+  return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim();
+}
+function normalizeMethod(v){
+  const txt=normalizeText(v);
+  return txt.includes('TARJETA') ? 'Tarjeta' : (v||'');
+}
+function normalizeCardType(v){
+  const txt=normalizeText(v);
+  if(txt.includes('BANKARD')) return 'BANKARD';
+  if(txt.includes('PACIFICARD')) return 'PACIFICARD';
+  return null;
+}
+function normalizeDb(data){
+  const next=Object.assign(structuredClone(DEF), data||{});
+  next.transactions=(next.transactions||[]).map(t=>{
+    const method=normalizeMethod(t.method);
+    return Object.assign({}, t, {
+      method,
+      cardType: method==='Tarjeta' ? normalizeCardType(t.cardType) : null
+    });
+  });
+  return next;
+}
 
 /* ══ Type toggle ══ */
 function setType(t){
@@ -639,7 +671,7 @@ function addTx(){
     category: document.getElementById('fCategory').value,
     date: document.getElementById('fDate').value||new Date().toISOString().slice(0,10),
     method: method,
-    cardType: method==='Tarjeta'?document.getElementById('fCardType').value:null,
+    cardType: method==='Tarjeta'?normalizeCardType(document.getElementById('fCardType').value):null,
     desc: document.getElementById('fDesc').value.trim()
   };
   db.transactions.push(tx); save();
@@ -654,9 +686,9 @@ function openEdit(id){
   document.getElementById('eCategory').value=t.category;
   document.getElementById('eDate').value=t.date;
   document.getElementById('eDesc').value=t.desc||'';
-  const isCard=t.method==='Tarjeta';
+  const isCard=normalizeMethod(t.method)==='Tarjeta';
   document.getElementById('eCardTypeWrap').style.display=isCard?'':'none';
-  if(isCard&&t.cardType) document.getElementById('eCardType').value=t.cardType;
+  if(isCard&&t.cardType) document.getElementById('eCardType').value=normalizeCardType(t.cardType)||'BANKARD';
   document.getElementById('ov').classList.add('show');
 }
 function saveEdit(){
@@ -665,7 +697,8 @@ function saveEdit(){
   t.category=document.getElementById('eCategory').value;
   t.date=document.getElementById('eDate').value;
   t.desc=document.getElementById('eDesc').value.trim();
-  if(t.method==='Tarjeta') t.cardType=document.getElementById('eCardType').value;
+  t.method=normalizeMethod(t.method);
+  if(t.method==='Tarjeta') t.cardType=normalizeCardType(document.getElementById('eCardType').value);
   else t.cardType=null;
   save(); closeModal(); render(); toast('✅ Cambios guardados');
 }
@@ -776,6 +809,7 @@ function render(){
 
   renderDonut(mTx);
   renderBars();
+  renderCardDonuts(mTx);
   renderTx(mTx);
   renderBudgets(mTx);
   renderGoals();
@@ -940,7 +974,7 @@ function renderTx(mTx){
       <div class="ic" style="background:${isIn?'var(--green-bg)':'var(--red-bg)'}">${ICONS[t.category]||(isIn?'💰':'•')}</div>
       <div class="meta">
         <div class="d">${t.desc||t.category}</div>
-        <div class="s">${dt} &middot; <span class="tag">${t.category}</span> &middot; ${t.method}${t.cardType?' · <span class="tag" style="background:var(--purple-bg);color:var(--purple);border-color:var(--purple-bd)">'+t.cardType+'</span>':''}</div>
+        <div class="s">${dt} &middot; <span class="tag">${t.category}</span> &middot; ${normalizeMethod(t.method)}${normalizeCardType(t.cardType)?' · <span class="tag" style="background:var(--purple-bg);color:var(--purple);border-color:var(--purple-bd)">'+normalizeCardType(t.cardType)+'</span>':''}</div>
       </div>
       <div class="amt ${isIn?'pin':'pout'}">${isIn?'+':'−'}${fmt(t.amount)}</div>`;
     list.appendChild(row);
@@ -959,7 +993,7 @@ function drawCardDonut(mTx, card, canvasId, legendId, totalId, accentColor){
   const ctx=canvas.getContext('2d');
   const leg=document.getElementById(legendId);
   leg.innerHTML='';
-  const txs=mTx.filter(t=>t.type==='gasto'&&t.method==='Tarjeta'&&t.cardType===card);
+  const txs=mTx.filter(t=>t.type==='gasto'&&normalizeMethod(t.method)==='Tarjeta'&&normalizeCardType(t.cardType)===card);
   const byCat={};
   txs.forEach(t=>byCat[t.category]=(byCat[t.category]||0)+t.amount);
   const entries=Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
