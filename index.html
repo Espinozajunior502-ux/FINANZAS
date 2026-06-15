@@ -374,10 +374,17 @@ canvas { display: block; }
           <div class="field"><label>Fecha</label><input id="fDate" type="date"></div>
           <div class="field">
             <label>Método de pago</label>
-            <select id="fMethod">
+            <select id="fMethod" onchange="toggleCardType('fMethod')">
               <option>Efectivo</option><option>Tarjeta</option><option>Transferencia</option><option>Débito</option><option>Otro</option>
             </select>
           </div>
+        </div>
+        <div class="field" id="fCardTypeWrap" style="display:none">
+          <label>Tarjeta</label>
+          <select id="fCardType">
+            <option value="BANKARD">💳 BANKARD</option>
+            <option value="PACIFICARD">💳 PACIFICARD</option>
+          </select>
         </div>
         <div class="field">
           <label>Descripción <span style="color:var(--faint);font-weight:400">(opcional)</span></label>
@@ -456,6 +463,45 @@ canvas { display: block; }
             </span>
           </div>
         </div>
+        <!-- Tarjetas donut -->
+        <div class="panel" style="grid-column:1/-1">
+          <div class="panel-head">
+            <h2>💳 Gastos por tarjeta</h2>
+            <span class="badge" id="cardDonutMonth"></span>
+          </div>
+          <div style="display:flex;gap:28px;align-items:center;flex-wrap:wrap">
+            <!-- BANKARD -->
+            <div style="flex:1;min-width:180px">
+              <div style="font-size:12px;font-weight:700;color:var(--purple);margin-bottom:10px;text-align:center;letter-spacing:.3px">BANKARD</div>
+              <div class="donut-wrap">
+                <div class="chart-container" style="position:relative;width:120px;height:120px;flex-shrink:0">
+                  <canvas id="bankardCanvas" width="120" height="120"></canvas>
+                  <div class="donut-center">
+                    <div class="dc-val" style="font-size:11px" id="bankardTotal">$0</div>
+                    <div class="dc-lbl">total</div>
+                  </div>
+                </div>
+                <div class="legend" id="bankardLegend" style="max-height:120px"></div>
+              </div>
+            </div>
+            <!-- divider -->
+            <div style="width:1px;background:var(--border);align-self:stretch;min-height:100px"></div>
+            <!-- PACIFICARD -->
+            <div style="flex:1;min-width:180px">
+              <div style="font-size:12px;font-weight:700;color:var(--blue);margin-bottom:10px;text-align:center;letter-spacing:.3px">PACIFICARD</div>
+              <div class="donut-wrap">
+                <div class="chart-container" style="position:relative;width:120px;height:120px;flex-shrink:0">
+                  <canvas id="pacificardCanvas" width="120" height="120"></canvas>
+                  <div class="donut-center">
+                    <div class="dc-val" style="font-size:11px" id="pacificardTotal">$0</div>
+                    <div class="dc-lbl">total</div>
+                  </div>
+                </div>
+                <div class="legend" id="pacificardLegend" style="max-height:120px"></div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- LISTA MOVIMIENTOS -->
@@ -504,6 +550,13 @@ canvas { display: block; }
     <div class="field"><label>Monto</label><input class="num" id="eAmount" type="number" step="0.01"></div>
     <div class="field"><label>Categoría</label><select id="eCategory"></select></div>
     <div class="field"><label>Fecha</label><input id="eDate" type="date"></div>
+    <div class="field" id="eCardTypeWrap" style="display:none">
+      <label>Tarjeta</label>
+      <select id="eCardType">
+        <option value="BANKARD">💳 BANKARD</option>
+        <option value="PACIFICARD">💳 PACIFICARD</option>
+      </select>
+    </div>
     <div class="field"><label>Descripción</label><input id="eDesc" type="text"></div>
     <div class="mbtns">
       <button class="mdel" onclick="delTx()">Eliminar</button>
@@ -562,6 +615,12 @@ function setType(t){
   btn.textContent = t==='gasto'?'Registrar gasto':'Registrar ingreso';
   fillCats('fCategory', t);
 }
+function toggleCardType(methodSelectId){
+  const isForm = methodSelectId==='fMethod';
+  const methodVal = document.getElementById(methodSelectId).value;
+  const wrapId = isForm ? 'fCardTypeWrap' : 'eCardTypeWrap';
+  document.getElementById(wrapId).style.display = methodVal==='Tarjeta' ? '' : 'none';
+}
 function fillCats(id, type){
   const s=document.getElementById(id), cur=s.value;
   s.innerHTML='';
@@ -573,12 +632,14 @@ function fillCats(id, type){
 function addTx(){
   const amt=parseFloat(document.getElementById('fAmount').value);
   if(!amt||amt<=0){ toast('Ingresa un monto válido'); return; }
+  const method=document.getElementById('fMethod').value;
   const tx={
     id: Date.now()+''+Math.floor(Math.random()*999),
     type: curType, amount: amt,
     category: document.getElementById('fCategory').value,
     date: document.getElementById('fDate').value||new Date().toISOString().slice(0,10),
-    method: document.getElementById('fMethod').value,
+    method: method,
+    cardType: method==='Tarjeta'?document.getElementById('fCardType').value:null,
     desc: document.getElementById('fDesc').value.trim()
   };
   db.transactions.push(tx); save();
@@ -592,7 +653,10 @@ function openEdit(id){
   document.getElementById('eAmount').value=t.amount;
   document.getElementById('eCategory').value=t.category;
   document.getElementById('eDate').value=t.date;
-  document.getElementById('eDesc').value=t.desc;
+  document.getElementById('eDesc').value=t.desc||'';
+  const isCard=t.method==='Tarjeta';
+  document.getElementById('eCardTypeWrap').style.display=isCard?'':'none';
+  if(isCard&&t.cardType) document.getElementById('eCardType').value=t.cardType;
   document.getElementById('ov').classList.add('show');
 }
 function saveEdit(){
@@ -601,6 +665,8 @@ function saveEdit(){
   t.category=document.getElementById('eCategory').value;
   t.date=document.getElementById('eDate').value;
   t.desc=document.getElementById('eDesc').value.trim();
+  if(t.method==='Tarjeta') t.cardType=document.getElementById('eCardType').value;
+  else t.cardType=null;
   save(); closeModal(); render(); toast('✅ Cambios guardados');
 }
 function delTx(){
@@ -874,11 +940,63 @@ function renderTx(mTx){
       <div class="ic" style="background:${isIn?'var(--green-bg)':'var(--red-bg)'}">${ICONS[t.category]||(isIn?'💰':'•')}</div>
       <div class="meta">
         <div class="d">${t.desc||t.category}</div>
-        <div class="s">${dt} &middot; <span class="tag">${t.category}</span> &middot; ${t.method}</div>
+        <div class="s">${dt} &middot; <span class="tag">${t.category}</span> &middot; ${t.method}${t.cardType?' · <span class="tag" style="background:var(--purple-bg);color:var(--purple);border-color:var(--purple-bd)">'+t.cardType+'</span>':''}</div>
       </div>
       <div class="amt ${isIn?'pin':'pout'}">${isIn?'+':'−'}${fmt(t.amount)}</div>`;
     list.appendChild(row);
   });
+}
+
+/* ══ Card donuts ══ */
+let cardAnim = { bankard: null, pacificard: null };
+function renderCardDonuts(mTx){
+  document.getElementById('cardDonutMonth').textContent = viewDate.toLocaleDateString('es-ES',{month:'long',year:'numeric'});
+  drawCardDonut(mTx, 'BANKARD',    'bankardCanvas',    'bankardLegend',    'bankardTotal',    '#8B5CF6');
+  drawCardDonut(mTx, 'PACIFICARD', 'pacificardCanvas', 'pacificardLegend', 'pacificardTotal', '#3B82F6');
+}
+function drawCardDonut(mTx, card, canvasId, legendId, totalId, accentColor){
+  const canvas=document.getElementById(canvasId);
+  const ctx=canvas.getContext('2d');
+  const leg=document.getElementById(legendId);
+  leg.innerHTML='';
+  const txs=mTx.filter(t=>t.type==='gasto'&&t.method==='Tarjeta'&&t.cardType===card);
+  const byCat={};
+  txs.forEach(t=>byCat[t.category]=(byCat[t.category]||0)+t.amount);
+  const entries=Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
+  const total=entries.reduce((a,b)=>a+b[1],0);
+  document.getElementById(totalId).textContent=total>0?fmtShort(total):'$0';
+  const CX=60,CY=60,R=38,LW=14;
+  if(total===0){
+    ctx.clearRect(0,0,120,120);
+    ctx.beginPath(); ctx.arc(CX,CY,R,0,Math.PI*2);
+    ctx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--border').trim();
+    ctx.lineWidth=LW; ctx.stroke();
+    leg.innerHTML='<div style="color:var(--faint);font-size:12px;padding:4px">Sin gastos.</div>';
+    return;
+  }
+  entries.forEach((e,i)=>{
+    const pct=Math.round(e[1]/total*100);
+    const color=PIE_COLORS[i%PIE_COLORS.length];
+    const li=document.createElement('div'); li.className='li';
+    li.innerHTML=`<span class="sw" style="background:${color}"></span><span class="nm" style="font-size:11px">${e[0]}</span><span class="pct">${pct}%</span><span class="lamt">${fmtShort(e[1])}</span>`;
+    leg.appendChild(li);
+  });
+  const fracs=entries.map(e=>e[1]/total);
+  const colors=entries.map((_,i)=>PIE_COLORS[i%PIE_COLORS.length]);
+  if(cardAnim[card.toLowerCase()]){ cancelAnimationFrame(cardAnim[card.toLowerCase()]); }
+  let prog=0;
+  function draw(p){
+    ctx.clearRect(0,0,120,120);
+    let sa=-Math.PI/2;
+    fracs.forEach((f,i)=>{
+      const slice=f*Math.PI*2*Math.min(1,p);
+      ctx.beginPath(); ctx.arc(CX,CY,R,sa,sa+slice);
+      ctx.strokeStyle=colors[i]; ctx.lineWidth=LW; ctx.stroke();
+      sa+=slice;
+    });
+  }
+  function anim(){ prog+=0.05; draw(prog); if(prog<1) cardAnim[card.toLowerCase()]=requestAnimationFrame(anim); else draw(1); }
+  anim();
 }
 
 /* ══ Presupuestos render ══ */
