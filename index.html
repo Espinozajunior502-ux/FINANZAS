@@ -305,6 +305,9 @@ canvas { display: block; }
 .detail-tx .damt { font-family: var(--mono); font-weight: 800; color: var(--red); white-space: nowrap; }
 .detail-tx .damt.in { color: var(--green); }
 .detail-tx .damt.neutral { color: var(--ink); }
+.detail-info { border: 1px solid var(--border); background: var(--surface2); border-radius: 10px; padding: 12px; }
+.detail-info strong { display: block; font-size: 13px; color: var(--ink); margin-bottom: 3px; }
+.detail-info span { display: block; font-size: 12px; color: var(--muted); line-height: 1.45; }
 
 /* ── GOAL PROGRESS RING ── */
 .goal-ring-wrap { display: flex; align-items: center; gap: 14px; }
@@ -615,9 +618,9 @@ canvas { display: block; }
       <button class="detail-close" onclick="closeDetail()" title="Cerrar">×</button>
     </div>
     <div class="detail-stats">
-      <div class="detail-stat"><div class="k">Total</div><div class="v" id="detailTotal">$0</div></div>
-      <div class="detail-stat"><div class="k">Movimientos</div><div class="v" id="detailCount">0</div></div>
-      <div class="detail-stat"><div class="k">Promedio</div><div class="v" id="detailAvg">$0</div></div>
+      <div class="detail-stat"><div class="k" id="detailK1">Total</div><div class="v" id="detailTotal">$0</div></div>
+      <div class="detail-stat"><div class="k" id="detailK2">Movimientos</div><div class="v" id="detailCount">0</div></div>
+      <div class="detail-stat"><div class="k" id="detailK3">Promedio</div><div class="v" id="detailAvg">$0</div></div>
     </div>
     <div class="detail-list" id="detailList"></div>
   </div>
@@ -957,9 +960,12 @@ function openDetail(data){
   document.getElementById('detailDot').style.background=data.color;
   document.getElementById('detailTitle').textContent=data.title;
   document.getElementById('detailSub').textContent=data.hidePct?`${data.sub} · ${month}`:`${data.sub} · ${month} · ${pct}% del total`;
+  document.getElementById('detailK1').textContent=data.labels?.[0]||'Total';
+  document.getElementById('detailK2').textContent=data.labels?.[1]||'Movimientos';
+  document.getElementById('detailK3').textContent=data.labels?.[2]||'Promedio';
   document.getElementById('detailTotal').textContent=data.totalPrefix?data.totalPrefix+fmt(Math.abs(data.total)):fmt(Math.abs(data.total));
-  document.getElementById('detailCount').textContent=data.txs.length;
-  document.getElementById('detailAvg').textContent=fmt(avg);
+  document.getElementById('detailCount').textContent=data.stat2 ?? data.txs.length;
+  document.getElementById('detailAvg').textContent=data.stat3 ?? fmt(avg);
   const list=document.getElementById('detailList');
   list.innerHTML='';
   if(data.note){
@@ -967,6 +973,16 @@ function openDetail(data){
     note.style.cssText='background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;font-size:12px;color:var(--ink2);line-height:1.4';
     note.textContent=data.note;
     list.appendChild(note);
+  }
+  if(data.rows){
+    data.rows.forEach(row=>{
+      const div=document.createElement('div');
+      div.className='detail-info';
+      div.innerHTML=`<strong>${esc(row.title)}</strong><span>${esc(row.body)}</span>`;
+      list.appendChild(div);
+    });
+    document.getElementById('detailOv').classList.add('show');
+    return;
   }
   data.txs.slice().sort((a,b)=>b.date.localeCompare(a.date)).forEach(t=>{
     const dt=new Date(t.date+'T00:00').toLocaleDateString('es-ES',{day:'2-digit',month:'short'});
@@ -988,14 +1004,49 @@ function openSummaryDetail(kind){
   const inc=incTx.reduce((a,b)=>a+b.amount,0);
   const exp=expTx.reduce((a,b)=>a+b.amount,0);
   const net=inc-exp;
+  const prevTx=txInMonth(new Date(viewDate.getFullYear(),viewDate.getMonth()-1,1));
+  const prevInc=prevTx.filter(t=>t.type==='ingreso').reduce((a,b)=>a+b.amount,0);
+  const prevExp=prevTx.filter(t=>t.type==='gasto').reduce((a,b)=>a+b.amount,0);
+  const byCat={};
+  expTx.forEach(t=>byCat[t.category]=(byCat[t.category]||0)+t.amount);
+  const topCat=Object.entries(byCat).sort((a,b)=>b[1]-a[1])[0];
+  const byIncome={};
+  incTx.forEach(t=>byIncome[t.category]=(byIncome[t.category]||0)+t.amount);
+  const topIncome=Object.entries(byIncome).sort((a,b)=>b[1]-a[1])[0];
+  const rate=inc>0?Math.round(net/inc*100):0;
+  const targetSaving=inc*.2;
+  const rows=[];
   if(kind==='income'){
-    openDetail({title:'Ingresos del mes',sub:'Entradas registradas',color:'#10B981',txs:incTx,total:inc,overallTotal:inc,hidePct:true,totalPrefix:'+'});
+    if(inc===0) rows.push({title:'Sin ingresos aún',body:'Registra tus entradas para saber de dónde viene tu dinero este mes.'});
+    else {
+      rows.push({title:'Fuente principal',body:topIncome?`${topIncome[0]} aporta ${fmt(topIncome[1])}, el ${Math.round(topIncome[1]/inc*100)}% de tus ingresos.`:'Tus ingresos están registrados sin una fuente dominante.'});
+      rows.push({title:'Comparación mensual',body:prevInc>0?(inc>=prevInc?`Vas ${fmt(inc-prevInc)} por encima del mes anterior.`:`Vas ${fmt(prevInc-inc)} por debajo del mes anterior.`):'No hay ingresos del mes anterior para comparar.'});
+      rows.push({title:'Lectura rápida',body:incTx.length===1?'Dependes de una sola entrada este mes; conviene buscar otra fuente o planificar con cuidado.':`Tienes ${incTx.length} entradas registradas, mejor repartidas que una sola fuente.`});
+    }
+    openDetail({title:'Ingresos del mes',sub:'Diagnóstico de entradas',color:'#10B981',txs:[],total:inc,overallTotal:inc,hidePct:true,totalPrefix:'+',labels:['Ingresos','Fuentes','Promedio'],stat2:incTx.length,stat3:incTx.length?fmt(inc/incTx.length):fmt(0),rows});
   } else if(kind==='expense'){
-    openDetail({title:'Gastos del mes',sub:'Salidas registradas',color:'#EF4444',txs:expTx,total:exp,overallTotal:exp,hidePct:true,totalPrefix:'-'});
+    if(exp===0) rows.push({title:'Sin gastos',body:'Este mes no registra salidas. Buen punto de partida para ahorrar o cubrir metas.'});
+    else {
+      rows.push({title:'Mayor peso',body:topCat?`${topCat[0]} concentra ${fmt(topCat[1])}, el ${Math.round(topCat[1]/exp*100)}% de tus gastos.`:'Tus gastos no tienen una categoría dominante.'});
+      rows.push({title:'Comparación mensual',body:prevExp>0?(exp<=prevExp?`Has gastado ${fmt(prevExp-exp)} menos que el mes anterior.`:`Has gastado ${fmt(exp-prevExp)} más que el mes anterior.`):'No hay gastos del mes anterior para comparar.'});
+      rows.push({title:'Punto de control',body:topCat&&topCat[1]>exp*.35?`Revisa ${topCat[0]} primero: es donde un ajuste pequeño tendría más impacto.`:'Tus gastos están más repartidos; revisa los pequeños repetidos.'});
+    }
+    openDetail({title:'Gastos del mes',sub:'Diagnóstico de salidas',color:'#EF4444',txs:[],total:exp,overallTotal:exp,hidePct:true,totalPrefix:'-',labels:['Gastos','Movimientos','Mayor rubro'],stat2:expTx.length,stat3:topCat?fmt(topCat[1]):fmt(0),rows});
   } else if(kind==='save'){
-    openDetail({title:'Ahorro del mes',sub:'Resultado entre ingresos y gastos',color:net>=0?'#8B5CF6':'#EF4444',txs:mTx,total:net,overallTotal:Math.max(inc,exp,1),hidePct:true,totalPrefix:net>=0?'+':'-',note:`Ingresos: ${fmt(inc)} · Gastos: ${fmt(exp)} · Ahorro: ${fmt(net)}`});
+    if(inc===0) rows.push({title:'Sin base de ahorro',body:'Primero registra ingresos para calcular una tasa de ahorro real.'});
+    else if(net<0) rows.push({title:'Déficit del mes',body:`Te faltan ${fmt(Math.abs(net))} para no cerrar el mes en negativo.`});
+    else if(net>=targetSaving) rows.push({title:'Buen excedente',body:`Ahorras ${rate}% de tus ingresos. Superas la referencia del 20%.`});
+    else rows.push({title:'Cerca del objetivo',body:`Para llegar al 20% de ahorro te faltan ${fmt(targetSaving-net)} este mes.`});
+    rows.push({title:'Relación ingresos/gastos',body:`Ingresaste ${fmt(inc)} y gastaste ${fmt(exp)}. Tu resultado es ${net>=0?'positivo':'negativo'} por ${fmt(Math.abs(net))}.`});
+    rows.push({title:'Siguiente acción',body:net<0?'Reduce primero el gasto más grande o registra una entrada pendiente.':(rate>=20?'Puedes destinar parte del excedente a una meta o fondo.':'Busca recortar gastos variables antes de tocar gastos fijos.')});
+    openDetail({title:'Ahorro del mes',sub:'Diagnóstico de ahorro',color:net>=0?'#8B5CF6':'#EF4444',txs:[],total:net,overallTotal:Math.max(inc,exp,1),hidePct:true,totalPrefix:net>=0?'+':'-',labels:['Ahorro','Tasa','Meta 20%'],stat2:inc>0?rate+'%':'0%',stat3:fmt(targetSaving),rows});
   } else {
-    openDetail({title:'Balance del mes',sub:'Todos los movimientos del mes',color:net>=0?'#3B82F6':'#EF4444',txs:mTx,total:net,overallTotal:Math.max(inc,exp,1),hidePct:true,totalPrefix:net>=0?'+':'-',note:`Ingresos del mes: ${fmt(inc)} · Gastos del mes: ${fmt(exp)}`});
+    if(net<0) rows.push({title:'Equilibrio pendiente',body:`Te faltan ${fmt(Math.abs(net))} para quedar en cero este mes.`});
+    else if(net>0) rows.push({title:'Excedente disponible',body:`Tienes ${fmt(net)} por encima de tus gastos del mes.`});
+    else rows.push({title:'En equilibrio',body:'Tus ingresos cubren exactamente tus gastos este mes.'});
+    rows.push({title:'Lectura del mes',body:`Ingresos: ${fmt(inc)} · Gastos: ${fmt(exp)} · Resultado: ${net>=0?'+':'-'}${fmt(Math.abs(net))}.`});
+    rows.push({title:'Siguiente paso',body:net<0?'Prioriza cubrir esa brecha antes de asumir nuevos gastos.':(net>0?'Puedes mover el excedente a ahorro, deuda o una meta concreta.':'Cualquier gasto nuevo romperá el equilibrio; registra primero entradas pendientes.')});
+    openDetail({title:'Balance general',sub:'Diagnóstico de equilibrio',color:net>=0?'#3B82F6':'#EF4444',txs:[],total:net,overallTotal:Math.max(inc,exp,1),hidePct:true,totalPrefix:net>=0?'+':'-',labels:['Balance','Ingresos','Gastos'],stat2:fmt(inc),stat3:fmt(exp),rows});
   }
 }
 function cardKey(e, kind){
