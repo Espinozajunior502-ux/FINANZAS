@@ -84,7 +84,7 @@ header.top {
 .month-nav .lbl { min-width: 148px; text-align: center; font-weight: 700; font-size: 14px; color: var(--ink); text-transform: capitalize; }
 
 /* ── SUMMARY CARDS ── */
-.cards { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; margin-bottom: 24px; }
+.cards { display: grid; grid-template-columns: repeat(5,1fr); gap: 14px; margin-bottom: 24px; }
 .card {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 20px; position: relative;
@@ -110,9 +110,11 @@ header.top {
 .card.income  .card-icon { background: var(--green-bg); }
 .card.expense .card-icon { background: var(--red-bg); }
 .card.save    .card-icon { background: var(--purple-bg); }
+.card.pending .card-icon { background: var(--amber-bg); }
 .card.balance .value { color: var(--ink); }
 .card.income  .value { color: var(--green); }
 .card.expense .value { color: var(--red); }
+.card.pending .value { color: var(--amber); }
 
 /* ── LAYOUT ── */
 .grid { display: grid; grid-template-columns: 370px 1fr; gap: 18px; align-items: start; }
@@ -212,6 +214,8 @@ canvas { display: block; }
 .txr .amt.pin  { color: var(--green); }
 .txr .amt.pout { color: var(--red); }
 .tag { font-size: 10px; padding: 2px 7px; border-radius: 20px; background: var(--bg); color: var(--muted); font-weight: 600; border: 1px solid var(--border); }
+.tag.paid { background: var(--green-bg); color: var(--green); border-color: var(--green-bd); }
+.tag.pending { background: var(--amber-bg); color: #B45309; border-color: #FDE68A; }
 
 /* ── BUDGETS & GOALS ── */
 .budget, .goal { margin-bottom: 14px; }
@@ -314,7 +318,7 @@ canvas { display: block; }
 
 /* ── RESPONSIVE ── */
 @media (max-width: 960px) {
-  .cards { grid-template-columns: 1fr 1fr; }
+  .cards { grid-template-columns: repeat(3,1fr); }
   .grid  { grid-template-columns: 1fr; }
   .charts{ grid-template-columns: 1fr; }
 }
@@ -379,6 +383,15 @@ canvas { display: block; }
       <div class="value num" id="cExpense">$0.00</div>
       <div class="insight" id="cExpenseSub">Sin gastos registrados este mes.</div>
     </div>
+    <div class="card pending clickable" onclick="openSummaryDetail('pending')" onkeydown="cardKey(event,'pending')" tabindex="0" role="button">
+      <div class="card-head">
+        <div class="card-icon">⏳</div>
+        <span class="card-badge" id="pendingBadge" style="background:var(--amber-bg);color:#B45309;border:1px solid #FDE68A"></span>
+      </div>
+      <div class="label">Pendiente por pagar</div>
+      <div class="value num" id="cPending">$0.00</div>
+      <div class="insight" id="cPendingSub">Nada pendiente este mes.</div>
+    </div>
     <div class="card save clickable" onclick="openSummaryDetail('save')" onkeydown="cardKey(event,'save')" tabindex="0" role="button">
       <div class="card-head">
         <div class="card-icon">🎯</div>
@@ -413,7 +426,7 @@ canvas { display: block; }
           <div class="field"><label>Fecha</label><input id="fDate" type="date"></div>
           <div class="field">
             <label>Método de pago</label>
-            <select id="fMethod" onchange="toggleCardType('fMethod')">
+            <select id="fMethod" onchange="toggleFormPaymentFields()">
               <option>Efectivo</option><option>Tarjeta</option><option>Transferencia</option><option>Débito</option><option>Otro</option>
             </select>
           </div>
@@ -423,6 +436,13 @@ canvas { display: block; }
           <select id="fCardType">
             <option value="BANKARD">💳 BANKARD</option>
             <option value="PACIFICARD">💳 PACIFICARD</option>
+          </select>
+        </div>
+        <div class="field" id="fPaymentStatusWrap">
+          <label id="fPaymentStatusLabel">Estado de pago</label>
+          <select id="fPaymentStatus">
+            <option value="paid">✅ Ya pagado / transferido ahora</option>
+            <option value="pending">⏳ Pendiente para pagar después</option>
           </select>
         </div>
         <div class="field">
@@ -596,6 +616,13 @@ canvas { display: block; }
         <option value="PACIFICARD">💳 PACIFICARD</option>
       </select>
     </div>
+    <div class="field" id="ePaymentStatusWrap" style="display:none">
+      <label>Estado de pago</label>
+      <select id="ePaymentStatus">
+        <option value="paid">✅ Pagado</option>
+        <option value="pending">⏳ Pendiente</option>
+      </select>
+    </div>
     <div class="field"><label>Descripción</label><input id="eDesc" type="text"></div>
     <div class="mbtns">
       <button class="mdel" onclick="delTx()">Eliminar</button>
@@ -688,13 +715,30 @@ function normalizeCardType(v){
   if(txt.includes('PACIFICARD')) return 'PACIFICARD';
   return null;
 }
+function normalizePaymentStatus(v){
+  const txt=normalizeText(v);
+  if(txt.includes('PEND')||txt==='pending') return 'pending';
+  return 'paid';
+}
+function defaultPaymentStatus(t, method){
+  if(t.type!=='gasto') return 'paid';
+  if(t.paymentStatus) return normalizePaymentStatus(t.paymentStatus);
+  return method==='Tarjeta' ? 'pending' : 'paid';
+}
+function isPending(t){
+  return t.type==='gasto' && normalizePaymentStatus(t.paymentStatus)==='pending';
+}
+function paymentStatusText(t){
+  return isPending(t) ? 'Pendiente' : 'Pagado';
+}
 function normalizeDb(data){
   const next=Object.assign(structuredClone(DEF), data||{});
   next.transactions=(next.transactions||[]).map(t=>{
     const method=normalizeMethod(t.method);
     return Object.assign({}, t, {
       method,
-      cardType: method==='Tarjeta' ? normalizeCardType(t.cardType) : null
+      cardType: method==='Tarjeta' ? normalizeCardType(t.cardType) : null,
+      paymentStatus: defaultPaymentStatus(t, method)
     });
   });
   return next;
@@ -709,12 +753,25 @@ function setType(t){
   btn.className='btn '+(t==='gasto'?'btn-out':'btn-in');
   btn.textContent = t==='gasto'?'Registrar gasto':'Registrar ingreso';
   fillCats('fCategory', t);
+  toggleFormPaymentFields();
 }
 function toggleCardType(methodSelectId){
   const isForm = methodSelectId==='fMethod';
   const methodVal = document.getElementById(methodSelectId).value;
   const wrapId = isForm ? 'fCardTypeWrap' : 'eCardTypeWrap';
   document.getElementById(wrapId).style.display = methodVal==='Tarjeta' ? '' : 'none';
+}
+function toggleFormPaymentFields(){
+  toggleCardType('fMethod');
+  const method=document.getElementById('fMethod').value;
+  const wrap=document.getElementById('fPaymentStatusWrap');
+  const label=document.getElementById('fPaymentStatusLabel');
+  wrap.style.display = curType==='gasto' ? '' : 'none';
+  if(curType!=='gasto') return;
+  if(method==='Transferencia') label.textContent='Transferencia';
+  else if(method==='Tarjeta') label.textContent='Estado de la tarjeta';
+  else label.textContent='Estado de pago';
+  document.getElementById('fPaymentStatus').value = method==='Tarjeta' ? 'pending' : 'paid';
 }
 function fillCats(id, type){
   const s=document.getElementById(id), cur=s.value;
@@ -735,6 +792,7 @@ function addTx(){
     date: document.getElementById('fDate').value||new Date().toISOString().slice(0,10),
     method: method,
     cardType: method==='Tarjeta'?normalizeCardType(document.getElementById('fCardType').value):null,
+    paymentStatus: curType==='gasto'?normalizePaymentStatus(document.getElementById('fPaymentStatus').value):'paid',
     desc: document.getElementById('fDesc').value.trim()
   };
   db.transactions.push(tx); save();
@@ -752,6 +810,8 @@ function openEdit(id){
   const isCard=normalizeMethod(t.method)==='Tarjeta';
   document.getElementById('eCardTypeWrap').style.display=isCard?'':'none';
   if(isCard&&t.cardType) document.getElementById('eCardType').value=normalizeCardType(t.cardType)||'BANKARD';
+  document.getElementById('ePaymentStatusWrap').style.display=t.type==='gasto'?'':'none';
+  document.getElementById('ePaymentStatus').value=normalizePaymentStatus(t.paymentStatus);
   document.getElementById('ov').classList.add('show');
 }
 function saveEdit(){
@@ -763,6 +823,7 @@ function saveEdit(){
   t.method=normalizeMethod(t.method);
   if(t.method==='Tarjeta') t.cardType=normalizeCardType(document.getElementById('eCardType').value);
   else t.cardType=null;
+  t.paymentStatus=t.type==='gasto'?normalizePaymentStatus(document.getElementById('ePaymentStatus').value):'paid';
   save(); closeModal(); render(); toast('✅ Cambios guardados');
 }
 function delTx(){
@@ -805,6 +866,8 @@ function render(){
 
   const mTx=txInMonth(viewDate);
   const inc=sum(mTx,'ingreso'), exp=sum(mTx,'gasto');
+  const pendingTx=mTx.filter(isPending);
+  const pendingTotal=pendingTx.reduce((a,b)=>a+b.amount,0);
   const balance=db.transactions.reduce((a,t)=>a+(t.type==='ingreso'?t.amount:-t.amount),0);
   const net=inc-exp, rate=inc>0?Math.round(net/inc*100):0;
 
@@ -819,8 +882,9 @@ function render(){
 
   const totalIngresos=db.transactions.filter(t=>t.type==='ingreso').reduce((a,b)=>a+b.amount,0);
   const totalGastos=db.transactions.filter(t=>t.type==='gasto').reduce((a,b)=>a+b.amount,0);
+  const allPending=db.transactions.filter(isPending).reduce((a,b)=>a+b.amount,0);
   document.getElementById('cBalanceSub').innerHTML = balance>=0
-    ? `<strong>${fmt(totalIngresos)}</strong> ingresado · <strong>${fmt(totalGastos)}</strong> gastado en total.`
+    ? `<strong>${fmt(totalIngresos)}</strong> ingresado · <strong>${fmt(totalGastos)}</strong> gastado · <strong>${fmt(allPending)}</strong> pendiente.`
     : `⚠️ Gastos superan ingresos por <strong>${fmt(Math.abs(balance))}</strong>.`;
 
   // Ingresos
@@ -850,6 +914,22 @@ function render(){
     else expSub=expCnt+' movimientos de gasto.';
   }
   document.getElementById('cExpenseSub').innerHTML=expSub;
+
+  // Pendiente por pagar
+  document.getElementById('cPending').textContent=fmt(pendingTotal);
+  document.getElementById('pendingBadge').textContent=pendingTx.length+' pendiente'+(pendingTx.length===1?'':'s');
+  let pendingSub='';
+  if(pendingTx.length===0) pendingSub='No tienes deudas pendientes para este mes.';
+  else {
+    const byMethod={};
+    pendingTx.forEach(t=>{
+      const key=normalizeMethod(t.method)==='Tarjeta' ? (normalizeCardType(t.cardType)||'Tarjeta') : normalizeMethod(t.method);
+      byMethod[key]=(byMethod[key]||0)+t.amount;
+    });
+    const top=Object.entries(byMethod).sort((a,b)=>b[1]-a[1])[0];
+    pendingSub=`Mayor pendiente: <strong>${top[0]}</strong> con ${fmt(top[1])}.`;
+  }
+  document.getElementById('cPendingSub').innerHTML=pendingSub;
 
   // Ahorro
   const cSave=document.getElementById('cSave');
@@ -951,7 +1031,7 @@ function drawSlices(ctx, entries, total, cx, cy, r, lw, prog, chart){
   });
 }
 function txLabel(t){
-  return `${esc(normalizeMethod(t.method))}${normalizeCardType(t.cardType)?' · '+normalizeCardType(t.cardType):''}`;
+  return `${esc(normalizeMethod(t.method))}${normalizeCardType(t.cardType)?' · '+normalizeCardType(t.cardType):''}${t.type==='gasto'?' · '+paymentStatusText(t):''}`;
 }
 function openDetail(data){
   const month=viewDate.toLocaleDateString('es-ES',{month:'long',year:'numeric'});
@@ -1032,6 +1112,24 @@ function openSummaryDetail(kind){
       rows.push({title:'Punto de control',body:topCat&&topCat[1]>exp*.35?`Revisa ${topCat[0]} primero: es donde un ajuste pequeño tendría más impacto.`:'Tus gastos están más repartidos; revisa los pequeños repetidos.'});
     }
     openDetail({title:'Gastos del mes',sub:'Diagnóstico de salidas',color:'#EF4444',txs:[],total:exp,overallTotal:exp,hidePct:true,totalPrefix:'-',labels:['Gastos','Movimientos','Mayor rubro'],stat2:expTx.length,stat3:topCat?fmt(topCat[1]):fmt(0),rows});
+  } else if(kind==='pending'){
+    const pendingTx=expTx.filter(isPending);
+    const paidTx=expTx.filter(t=>!isPending(t));
+    const pending=pendingTx.reduce((a,b)=>a+b.amount,0);
+    const paid=paidTx.reduce((a,b)=>a+b.amount,0);
+    if(pending===0) rows.push({title:'Todo al día',body:'No tienes gastos pendientes de pago en este mes.'});
+    else {
+      const byMethod={};
+      pendingTx.forEach(t=>{
+        const key=normalizeMethod(t.method)==='Tarjeta' ? (normalizeCardType(t.cardType)||'Tarjeta') : normalizeMethod(t.method);
+        byMethod[key]=(byMethod[key]||0)+t.amount;
+      });
+      const top=Object.entries(byMethod).sort((a,b)=>b[1]-a[1])[0];
+      rows.push({title:'Pendiente principal',body:top?`${top[0]} concentra ${fmt(top[1])} pendiente.`:'Tienes gastos pendientes sin método dominante.'});
+      rows.push({title:'Ya pagado',body:`Este mes ya marcaste ${fmt(paid)} como pagado.`});
+      rows.push({title:'Para fin de mes',body:`Reserva ${fmt(pending)} para cubrir lo que sigue pendiente.`});
+    }
+    openDetail({title:'Pendiente por pagar',sub:'Deudas y transferencias por cubrir',color:'#F59E0B',txs:pendingTx,total:pending,overallTotal:Math.max(exp,1),hidePct:true,labels:['Pendiente','Movimientos','Pagado'],stat2:pendingTx.length,stat3:fmt(paid),rows:pending===0?rows:null,note:pending>0?'Haz clic en una deuda para editarla y marcarla como pagada cuando la cubras.':null});
   } else if(kind==='save'){
     if(inc===0) rows.push({title:'Sin base de ahorro',body:'Primero registra ingresos para calcular una tasa de ahorro real.'});
     else if(net<0) rows.push({title:'Déficit del mes',body:`Te faltan ${fmt(Math.abs(net))} para no cerrar el mes en negativo.`});
@@ -1195,11 +1293,12 @@ function renderTx(mTx){
     const isIn=t.type==='ingreso';
     const row=document.createElement('div'); row.className='txr'; row.onclick=()=>openEdit(t.id);
     const dt=new Date(t.date+'T00:00').toLocaleDateString('es-ES',{day:'2-digit',month:'short'});
+    const statusTag=!isIn?` &middot; <span class="tag ${isPending(t)?'pending':'paid'}">${paymentStatusText(t)}</span>`:'';
     row.innerHTML=`
       <div class="ic" style="background:${isIn?'var(--green-bg)':'var(--red-bg)'}">${ICONS[t.category]||(isIn?'💰':'•')}</div>
       <div class="meta">
         <div class="d">${t.desc||t.category}</div>
-        <div class="s">${dt} &middot; <span class="tag">${t.category}</span> &middot; ${normalizeMethod(t.method)}${normalizeCardType(t.cardType)?' · <span class="tag" style="background:var(--purple-bg);color:var(--purple);border-color:var(--purple-bd)">'+normalizeCardType(t.cardType)+'</span>':''}</div>
+        <div class="s">${dt} &middot; <span class="tag">${t.category}</span> &middot; ${normalizeMethod(t.method)}${normalizeCardType(t.cardType)?' · <span class="tag" style="background:var(--purple-bg);color:var(--purple);border-color:var(--purple-bd)">'+normalizeCardType(t.cardType)+'</span>':''}${statusTag}</div>
       </div>
       <div class="amt ${isIn?'pin':'pout'}">${isIn?'+':'−'}${fmt(t.amount)}</div>`;
     list.appendChild(row);
@@ -1335,9 +1434,9 @@ function renderGoals(){
 /* ══ Export / Import ══ */
 function exportCSV(){
   if(db.transactions.length===0){ toast('No hay datos para exportar'); return; }
-  let csv='Fecha,Tipo,Categoria,Monto,Metodo,Descripcion\n';
+  let csv='Fecha,Tipo,Categoria,Monto,Metodo,Tarjeta,EstadoPago,Descripcion\n';
   db.transactions.slice().sort((a,b)=>a.date.localeCompare(b.date)).forEach(t=>{
-    csv+=`${t.date},${t.type},${t.category},${t.amount},${t.method},"${(t.desc||'').replace(/"/g,'""')}"\n`;
+    csv+=`${t.date},${t.type},${t.category},${t.amount},${t.method},${normalizeCardType(t.cardType)||''},${t.type==='gasto'?paymentStatusText(t):''},"${(t.desc||'').replace(/"/g,'""')}"\n`;
   });
   download(csv,'finanzas.csv','text/csv');
 }
@@ -1357,22 +1456,22 @@ function importJSON(e){
 /* ══ Demo / Wipe ══ */
 function loadDemo(){
   const today=new Date();
-  const mk=(off,type,cat,amt,desc,m,cardType=null)=>{ const d=new Date(today.getFullYear(),today.getMonth(),off); return {id:Date.now()+Math.random()+'',type,category:cat,amount:amt,date:d.toISOString().slice(0,10),method:m,cardType:normalizeCardType(cardType),desc}; };
+  const mk=(off,type,cat,amt,desc,m,cardType=null,paymentStatus=null)=>{ const d=new Date(today.getFullYear(),today.getMonth(),off); const method=normalizeMethod(m); return {id:Date.now()+Math.random()+'',type,category:cat,amount:amt,date:d.toISOString().slice(0,10),method,cardType:method==='Tarjeta'?normalizeCardType(cardType):null,paymentStatus:type==='gasto'?(paymentStatus||defaultPaymentStatus({type, paymentStatus:null}, method)):'paid',desc}; };
   db.transactions=[
     mk(1,'ingreso','Sueldo',1200,'Pago de nómina','Transferencia'),
-    mk(2,'gasto','Vivienda',350,'Arriendo','Transferencia'),
-    mk(3,'gasto','Alimentación',85,'Supermercado','Tarjeta','BANKARD'),
+    mk(2,'gasto','Vivienda',350,'Arriendo','Transferencia',null,'pending'),
+    mk(3,'gasto','Alimentación',85,'Supermercado','Tarjeta','BANKARD','pending'),
     mk(5,'gasto','Transporte',40,'Gasolina','Efectivo'),
     mk(7,'gasto','Servicios',60,'Luz y agua','Débito'),
     mk(9,'ingreso','Ventas',180,'Venta extra','Efectivo'),
-    mk(12,'gasto','Ocio',55,'Cine y comida','Tarjeta','PACIFICARD'),
-    mk(15,'gasto','Alimentación',70,'Compras semana','Tarjeta','PACIFICARD'),
+    mk(12,'gasto','Ocio',55,'Cine y comida','Tarjeta','PACIFICARD','paid'),
+    mk(15,'gasto','Alimentación',70,'Compras semana','Tarjeta','PACIFICARD','pending'),
     mk(18,'gasto','Salud',30,'Farmacia','Efectivo')
   ];
   const pm=new Date(today.getFullYear(),today.getMonth()-1,10);
   db.transactions.push({id:Date.now()+'a',type:'ingreso',category:'Sueldo',amount:1200,date:pm.toISOString().slice(0,10),method:'Transferencia',desc:'Nómina'});
-  db.transactions.push({id:Date.now()+'b',type:'gasto',category:'Vivienda',amount:350,date:pm.toISOString().slice(0,10),method:'Transferencia',desc:'Arriendo'});
-  db.transactions.push({id:Date.now()+'c',type:'gasto',category:'Alimentación',amount:320,date:pm.toISOString().slice(0,10),method:'Tarjeta',cardType:'BANKARD',desc:'Comida'});
+  db.transactions.push({id:Date.now()+'b',type:'gasto',category:'Vivienda',amount:350,date:pm.toISOString().slice(0,10),method:'Transferencia',paymentStatus:'paid',desc:'Arriendo'});
+  db.transactions.push({id:Date.now()+'c',type:'gasto',category:'Alimentación',amount:320,date:pm.toISOString().slice(0,10),method:'Tarjeta',cardType:'BANKARD',paymentStatus:'pending',desc:'Comida'});
   db.budgets={'Alimentación':300,'Transporte':100,'Ocio':80};
   db.goals=[{id:'g1',name:'Fondo de emergencia',target:2000,saved:650},{id:'g2',name:'Viaje a Galápagos',target:800,saved:200}];
   selectedSlice={chart:null,category:null};
