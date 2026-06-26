@@ -183,6 +183,15 @@ canvas { display: block; }
 .legend .pct { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--muted); }
 .legend .lamt { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--ink); margin-left: 4px; }
 .donut-wrap { display: flex; gap: 18px; align-items: center; }
+.pay-card-btn {
+  margin: 10px auto 0; border: 1px solid var(--green-bd); background: var(--green-bg);
+  color: var(--green); border-radius: 9px; padding: 8px 12px;
+  font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  transition: .15s; max-width: 180px; width: 100%;
+}
+.pay-card-btn:hover:not(:disabled) { filter: brightness(.98); transform: translateY(-1px); }
+.pay-card-btn:disabled { opacity: .55; cursor: not-allowed; filter: grayscale(.2); }
 
 /* bar chart labels */
 .bar-yaxis { position: absolute; left: 0; top: 0; bottom: 30px; display: flex; flex-direction: column; justify-content: space-between; padding-right: 6px; }
@@ -542,6 +551,7 @@ canvas { display: block; }
                 </div>
                 <div class="legend" id="bankardLegend" style="max-height:120px"></div>
               </div>
+              <button class="pay-card-btn" id="bankardPayBtn" onclick="markCardPaid('BANKARD')">✅ Marcar BANKARD pagada</button>
             </div>
             <!-- divider -->
             <div style="width:1px;background:var(--border);align-self:stretch;min-height:100px"></div>
@@ -558,6 +568,7 @@ canvas { display: block; }
                 </div>
                 <div class="legend" id="pacificardLegend" style="max-height:120px"></div>
               </div>
+              <button class="pay-card-btn" id="pacificardPayBtn" onclick="markCardPaid('PACIFICARD')">✅ Marcar PACIFICARD pagada</button>
             </div>
           </div>
         </div>
@@ -1312,6 +1323,22 @@ function renderCardDonuts(mTx){
   drawCardDonut(mTx, 'BANKARD',    'bankardCanvas',    'bankardLegend',    'bankardTotal',    '#8B5CF6');
   drawCardDonut(mTx, 'PACIFICARD', 'pacificardCanvas', 'pacificardLegend', 'pacificardTotal', '#3B82F6');
 }
+function markCardPaid(card){
+  const pending=db.transactions.filter(t=>
+    t.date.slice(0,7)===ym(viewDate) &&
+    t.type==='gasto' &&
+    normalizeMethod(t.method)==='Tarjeta' &&
+    normalizeCardType(t.cardType)===card &&
+    isPending(t)
+  );
+  if(pending.length===0){ toast('No hay pendientes en '+card+' este mes'); return; }
+  const total=pending.reduce((a,b)=>a+b.amount,0);
+  pending.forEach(t=>t.paymentStatus='paid');
+  save();
+  selectedSlice={chart:null,category:null};
+  render();
+  toast('✅ '+card+' marcada como pagada: '+fmt(total));
+}
 function drawCardDonut(mTx, card, canvasId, legendId, totalId, accentColor){
   const canvas=document.getElementById(canvasId);
   const ctx=canvas.getContext('2d');
@@ -1319,6 +1346,13 @@ function drawCardDonut(mTx, card, canvasId, legendId, totalId, accentColor){
   leg.innerHTML='';
   const chart='card-'+card;
   const txs=mTx.filter(t=>t.type==='gasto'&&normalizeMethod(t.method)==='Tarjeta'&&normalizeCardType(t.cardType)===card);
+  const pendingTotal=txs.filter(isPending).reduce((a,b)=>a+b.amount,0);
+  const payBtn=document.getElementById(card.toLowerCase()+'PayBtn');
+  if(payBtn){
+    payBtn.disabled=pendingTotal<=0;
+    payBtn.textContent=pendingTotal>0 ? '✅ Pagar '+fmtShort(pendingTotal) : '✅ Todo pagado';
+    payBtn.title=pendingTotal>0 ? 'Marcar como pagados los pendientes de '+card+' en este mes' : 'No hay pendientes de '+card+' en este mes';
+  }
   const entries=buildCategoryEntries(txs);
   const total=entries.reduce((a,b)=>a+b.amount,0);
   const selected=selectedSlice.chart===chart?entries.find(e=>e.category===selectedSlice.category):null;
