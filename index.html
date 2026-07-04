@@ -33,6 +33,9 @@
   --purple:   #8B5CF6;
   --purple-bg:#F5F3FF;
   --purple-bd:#DDD6FE;
+  --teal:     #0D9488;
+  --teal-bg:  #F0FDFA;
+  --teal-bd:  #99F6E4;
 
   --c0:#6366F1; --c1:#10B981; --c2:#EF4444; --c3:#F59E0B; --c4:#06B6D4;
   --c5:#EC4899; --c6:#8B5CF6; --c7:#84CC16; --c8:#F97316; --c9:#3B82F6;
@@ -84,7 +87,7 @@ header.top {
 .month-nav .lbl { min-width: 148px; text-align: center; font-weight: 700; font-size: 14px; color: var(--ink); text-transform: capitalize; }
 
 /* ── SUMMARY CARDS ── */
-.cards { display: grid; grid-template-columns: repeat(5,1fr); gap: 14px; margin-bottom: 24px; }
+.cards { display: grid; grid-template-columns: repeat(6,1fr); gap: 14px; margin-bottom: 24px; }
 .card {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 20px; position: relative;
@@ -111,6 +114,7 @@ header.top {
 .card.expense .card-icon { background: var(--red-bg); }
 .card.save    .card-icon { background: var(--purple-bg); }
 .card.pending .card-icon { background: var(--amber-bg); }
+.card.realsavings .card-icon { background: var(--teal-bg); }
 .card.balance .value { color: var(--ink); }
 .card.income  .value { color: var(--green); }
 .card.expense .value { color: var(--red); }
@@ -373,6 +377,15 @@ canvas { display: block; }
       <div class="label">Balance total</div>
       <div class="value num" id="cBalance">$0.00</div>
       <div class="insight" id="cBalanceSub">Acumulado de todos tus movimientos.</div>
+    </div>
+    <div class="card realsavings clickable" onclick="openSummaryDetail('realsavings')" onkeydown="cardKey(event,'realsavings')" tabindex="0" role="button">
+      <div class="card-head">
+        <div class="card-icon">🧮</div>
+        <span class="card-badge" id="realSavingsBadge"></span>
+      </div>
+      <div class="label">Ahorro real (2 meses)</div>
+      <div class="value num" id="cRealSavings">$0.00</div>
+      <div class="insight" id="cRealSavingsSub">Lo que te quedó el mes pasado + lo que llevas este mes.</div>
     </div>
     <div class="card income clickable" onclick="openSummaryDetail('income')" onkeydown="cardKey(event,'income')" tabindex="0" role="button">
       <div class="card-head">
@@ -882,6 +895,12 @@ function render(){
   const balance=db.transactions.reduce((a,t)=>a+(t.type==='ingreso'?t.amount:-t.amount),0);
   const net=inc-exp, rate=inc>0?Math.round(net/inc*100):0;
 
+  // Mes anterior (para el ahorro real acumulado)
+  const pmDate=new Date(viewDate.getFullYear(),viewDate.getMonth()-1,1);
+  const pmTx=txInMonth(pmDate);
+  const pmInc=sum(pmTx,'ingreso'), pmExp=sum(pmTx,'gasto');
+  const pmNet=pmInc-pmExp;
+
   // Balance
   const cBal=document.getElementById('cBalance');
   cBal.textContent=fmt(balance);
@@ -897,6 +916,17 @@ function render(){
   document.getElementById('cBalanceSub').innerHTML = balance>=0
     ? `<strong>${fmt(totalIngresos)}</strong> ingresado · <strong>${fmt(totalGastos)}</strong> gastado · <strong>${fmt(allPending)}</strong> pendiente.`
     : `⚠️ Gastos superan ingresos por <strong>${fmt(Math.abs(balance))}</strong>.`;
+
+  // Ahorro real (mes pasado + este mes)
+  const realSavings=pmNet+net;
+  const cReal=document.getElementById('cRealSavings');
+  cReal.textContent=fmt(realSavings);
+  cReal.style.color = realSavings>=0?'var(--teal)':'var(--red)';
+  const realBadge=document.getElementById('realSavingsBadge');
+  if(realSavings>0){ realBadge.textContent='Disponible'; realBadge.style.cssText='background:var(--teal-bg);color:var(--teal);border:1px solid var(--teal-bd)'; }
+  else if(realSavings<0){ realBadge.textContent='En negativo'; realBadge.style.cssText='background:var(--red-bg);color:var(--red);border:1px solid var(--red-bd)'; }
+  else { realBadge.textContent='En cero'; realBadge.style.cssText='background:var(--bg);color:var(--muted);border:1px solid var(--border)'; }
+  document.getElementById('cRealSavingsSub').innerHTML = `<strong>${fmt(pmNet)}</strong> del mes pasado + <strong>${fmt(net)}</strong> de este mes.`;
 
   // Ingresos
   document.getElementById('cIncome').textContent=fmt(inc);
@@ -1098,6 +1128,7 @@ function openSummaryDetail(kind){
   const prevTx=txInMonth(new Date(viewDate.getFullYear(),viewDate.getMonth()-1,1));
   const prevInc=prevTx.filter(t=>t.type==='ingreso').reduce((a,b)=>a+b.amount,0);
   const prevExp=prevTx.filter(t=>t.type==='gasto').reduce((a,b)=>a+b.amount,0);
+  const prevNet=prevInc-prevExp;
   const byCat={};
   expTx.forEach(t=>byCat[t.category]=(byCat[t.category]||0)+t.amount);
   const topCat=Object.entries(byCat).sort((a,b)=>b[1]-a[1])[0];
@@ -1149,6 +1180,12 @@ function openSummaryDetail(kind){
     rows.push({title:'Relación ingresos/gastos',body:`Ingresaste ${fmt(inc)} y gastaste ${fmt(exp)}. Tu resultado es ${net>=0?'positivo':'negativo'} por ${fmt(Math.abs(net))}.`});
     rows.push({title:'Siguiente acción',body:net<0?'Reduce primero el gasto más grande o registra una entrada pendiente.':(rate>=20?'Puedes destinar parte del excedente a una meta o fondo.':'Busca recortar gastos variables antes de tocar gastos fijos.')});
     openDetail({title:'Ahorro del mes',sub:'Diagnóstico de ahorro',color:net>=0?'#8B5CF6':'#EF4444',txs:[],total:net,overallTotal:Math.max(inc,exp,1),hidePct:true,totalPrefix:net>=0?'+':'-',labels:['Ahorro','Tasa','Meta 20%'],stat2:inc>0?rate+'%':'0%',stat3:fmt(targetSaving),rows});
+  } else if(kind==='realsavings'){
+    const realSavings=prevNet+net;
+    rows.push({title:'Mes pasado',body:`Cerraste el mes anterior ${prevNet>=0?'con un excedente de':'con un déficit de'} ${fmt(Math.abs(prevNet))} (ingresos ${fmt(prevInc)} − gastos ${fmt(prevExp)}).`});
+    rows.push({title:'Este mes (hasta ahora)',body:`Llevas ${net>=0?'un excedente de':'un déficit de'} ${fmt(Math.abs(net))} (ingresos ${fmt(inc)} − gastos ${fmt(exp)}).`});
+    rows.push({title:'Total acumulado',body: realSavings>=0 ? `Sumando ambos meses, deberías tener disponible aproximadamente ${fmt(realSavings)}.` : `Sumando ambos meses, estás en negativo por ${fmt(Math.abs(realSavings))}.`});
+    openDetail({title:'Ahorro real (2 meses)',sub:'Mes pasado + este mes',color:'#0D9488',txs:[],total:realSavings,overallTotal:Math.max(Math.abs(prevNet)+Math.abs(net),1),hidePct:true,totalPrefix:realSavings>=0?'+':'-',labels:['Acumulado','Mes pasado','Este mes'],stat2:fmt(prevNet),stat3:fmt(net),rows});
   } else {
     if(net<0) rows.push({title:'Equilibrio pendiente',body:`Te faltan ${fmt(Math.abs(net))} para quedar en cero este mes.`});
     else if(net>0) rows.push({title:'Excedente disponible',body:`Tienes ${fmt(net)} por encima de tus gastos del mes.`});
