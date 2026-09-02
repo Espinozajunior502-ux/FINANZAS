@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 <title>Mis Finanzas</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -409,6 +409,122 @@ button, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: .01ms !important; } }
 </style>
+
+<style id="mobile-app-layout">
+*{box-sizing:border-box}
+html,body{width:100%;max-width:100%;overflow-x:hidden}
+body{-webkit-text-size-adjust:100%;text-size-adjust:100%;overscroll-behavior-x:none}
+img,svg,canvas,video{max-width:100%;height:auto}
+input,select,textarea,button{max-width:100%;font:inherit}
+table{max-width:100%}
+
+@media (max-width: 700px){
+  html,body{width:100%;min-width:0;overflow-x:hidden}
+  body{margin:0;padding:0;font-size:15px}
+
+  /* Main containers: remove desktop fixed widths/margins */
+  .container,.main-container,.app-container,.content,.wrapper,.page-container{
+    width:100%!important;max-width:100%!important;min-width:0!important;
+    margin-left:0!important;margin-right:0!important;
+    padding-left:12px!important;padding-right:12px!important;
+  }
+
+  /* Headers/nav */
+  header,.header,.topbar,.navbar,.nav,.app-header{
+    max-width:100%!important;min-width:0!important;
+  }
+  header .container,.header .container,.topbar .container{
+    padding-left:12px!important;padding-right:12px!important;
+  }
+
+  /* Prevent flex/grid children from forcing horizontal scrolling */
+  .row,.flex,.grid,.cards,.dashboard,.stats,.summary,.actions{
+    max-width:100%!important;min-width:0!important;
+  }
+  [style*="min-width"],[style*="width: 1"],[style*="width:1"]{
+    min-width:0!important;
+  }
+
+  /* Common desktop grids become single-column or two-column only when safe */
+  .grid-4,.grid-3,.stats-grid,.dashboard-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .grid-2,.form-grid{grid-template-columns:minmax(0,1fr)!important}
+
+  /* Any card must be allowed to shrink */
+  .card,.panel,.box,.stat-card,.summary-card,.chart-card,.modal-content{
+    min-width:0!important;max-width:100%!important;
+    overflow-wrap:anywhere;
+  }
+
+  /* Forms: one comfortable field per row */
+  form,.form-row{max-width:100%!important}
+  .form-row,.form-grid{display:grid!important;grid-template-columns:minmax(0,1fr)!important;gap:10px!important}
+  input,select,textarea{
+    width:100%!important;min-width:0!important;
+    min-height:44px!important;
+  }
+  button{min-height:44px;touch-action:manipulation}
+
+  /* Tables: never force the whole page wider.
+     Put wide tables inside a local scroll container. */
+  .table-container,.table-responsive,.table-wrapper,.overflow-auto{
+    width:100%!important;max-width:100%!important;
+    overflow-x:auto!important;-webkit-overflow-scrolling:touch;
+  }
+  table{font-size:13px!important;width:max-content;min-width:100%}
+  th,td{white-space:normal!important;word-break:break-word}
+
+  /* Charts fit the viewport instead of overflowing */
+  canvas{display:block!important;max-width:100%!important}
+  .chart-container,.chart-wrapper,.chart-card{
+    width:100%!important;max-width:100%!important;min-width:0!important;
+  }
+
+  /* Modals become true phone sheets */
+  .modal,.modal-overlay,.dialog-overlay{
+    padding:10px!important;
+  }
+  .modal-content,.modal-dialog,.dialog{
+    width:100%!important;max-width:100%!important;
+    max-height:calc(100dvh - 20px)!important;
+    overflow-y:auto!important;overflow-x:hidden!important;
+    margin:0 auto!important;border-radius:16px!important;
+  }
+
+  /* Long text/URLs/buttons must wrap */
+  h1,h2,h3,h4,p,.label,.title,.subtitle,.description{
+    max-width:100%;overflow-wrap:anywhere;
+  }
+
+  /* Navigation/action bars wrap instead of overflowing */
+  .actions,.action-buttons,.toolbar,.button-row,.tabs{
+    display:flex!important;flex-wrap:wrap!important;
+    gap:8px!important;max-width:100%!important;
+  }
+  .actions button,.action-buttons button,.toolbar button,.button-row button,.tabs button{
+    flex:1 1 auto;min-width:0!important;
+  }
+
+  /* Footer */
+  footer{max-width:100%!important;overflow:hidden}
+}
+
+@media (max-width: 430px){
+  body{font-size:14px}
+  .container,.main-container,.app-container,.content,.wrapper,.page-container{
+    padding-left:10px!important;padding-right:10px!important;
+  }
+  .grid-4,.grid-3,.stats-grid,.dashboard-grid{
+    grid-template-columns:minmax(0,1fr)!important;
+  }
+  .card,.panel,.box,.stat-card,.summary-card,.chart-card{
+    padding:12px!important;
+  }
+  h1{font-size:1.45rem!important}
+  h2{font-size:1.2rem!important}
+  h3{font-size:1.05rem!important}
+}
+</style>
+
 </head>
 <body>
 <div class="wrap">
