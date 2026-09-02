@@ -627,6 +627,7 @@ canvas { display: block; }
 
   <!-- FOOTER -->
   <div class="foot">
+    <button onclick="openSyncModal()">☁ Sincronizar dispositivos</button>
     <button onclick="exportCSV()">⬇ Exportar CSV</button>
     <button onclick="exportJSON()">⬇ Respaldo JSON</button>
     <button onclick="document.getElementById('importFile').click()">⬆ Importar</button>
@@ -634,7 +635,31 @@ canvas { display: block; }
     <button class="danger" onclick="wipe()">🗑 Borrar todo</button>
     <input type="file" id="importFile" accept=".json" style="display:none" onchange="importJSON(event)">
   </div>
+  <div id="syncStatus" style="text-align:center;margin-top:10px;font-size:12px;color:var(--muted)">☁ Sin sincronización</div>
 
+</div>
+
+<!-- MODAL SINCRONIZACIÓN -->
+<div id="syncOv" onclick="if(event.target.id==='syncOv')closeSyncModal()" style="position:fixed;inset:0;background:rgba(15,23,42,.4);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:80;padding:18px">
+  <div class="modal">
+    <h3>☁ Sincronizar dispositivos</h3>
+    <div class="insight insight-info" style="margin-bottom:14px">
+      Usa el mismo código en tu PC, celular o cualquier otro dispositivo. Los datos se guardarán en la nube y se actualizarán automáticamente.
+    </div>
+    <div class="field">
+      <label>Código de sincronización</label>
+      <input id="syncCode" type="text" autocomplete="off" spellcheck="false" placeholder="Ej. 7K4M-92PX-Q8T1" style="text-transform:uppercase;letter-spacing:1.5px;font-family:var(--mono);font-weight:700">
+    </div>
+    <div style="font-size:11px;color:var(--muted);line-height:1.45;margin:-3px 0 14px">
+      Este código funciona como una llave. No lo publiques ni lo compartas con otras personas.
+    </div>
+    <div class="mbtns">
+      <button class="mdel" onclick="closeSyncModal()">Cancelar</button>
+      <button class="msave" onclick="connectSyncFromModal()">☁ Conectar</button>
+    </div>
+    <button onclick="generateSyncCode()" style="width:100%;margin-top:10px;padding:10px;border:1px solid var(--border);background:var(--surface2);color:var(--ink2);border-radius:10px;font-weight:700;cursor:pointer;font-family:inherit">✨ Generar código nuevo</button>
+    <button id="disconnectSyncBtn" onclick="disconnectSync()" style="display:none;width:100%;margin-top:8px;padding:9px;border:0;background:transparent;color:var(--red);font-weight:700;cursor:pointer;font-family:inherit">Desconectar sincronización</button>
+  </div>
 </div>
 
 <!-- TOAST -->
@@ -707,6 +732,200 @@ canvas { display: block; }
   </div>
 </div>
 
+<!-- Firebase: sincronización en la nube -->
+<script src="https://www.gstatic.com/firebasejs/12.2.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.2.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore-compat.js"></script>
+
+<script>
+/*
+  ══ CONFIGURACIÓN FIREBASE ══
+  1) Crea un proyecto en Firebase.
+  2) Registra una aplicación Web.
+  3) Copia aquí el objeto firebaseConfig que te da Firebase.
+  4) Activa Authentication > Sign-in method > Anonymous.
+  5) Crea Firestore Database y publica las reglas indicadas en las instrucciones.
+*/
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAS5wK8ATHU6Gt0IkeGE8gpZ_xnJewCKA",
+  authDomain: "mis-finanzas-e731d.firebaseapp.com",
+  projectId: "mis-finanzas-e731d",
+  storageBucket: "mis-finanzas-e731d.firebasestorage.app",
+  messagingSenderId: "1083332002258",
+  appId: "1:1083332002258:web:2309ccf808414ddf03080b",
+  measurementId: "G-15D9QXRR7F"
+};
+
+let firebaseReady = false;
+let firebaseAuth = null;
+let firestore = null;
+let syncUnsubscribe = null;
+let syncCodeValue = localStorage.getItem('misFinanzas_syncCode') || '';
+let cloudLoaded = false;
+let cloudSaveTimer = null;
+let cloudSaving = false;
+
+function firebaseConfigured(){
+  return FIREBASE_CONFIG.apiKey &&
+    !FIREBASE_CONFIG.apiKey.startsWith('REEMPLAZAR_') &&
+    FIREBASE_CONFIG.projectId &&
+    !FIREBASE_CONFIG.projectId.startsWith('REEMPLAZAR_') &&
+    FIREBASE_CONFIG.appId &&
+    !FIREBASE_CONFIG.appId.startsWith('REEMPLAZAR_');
+}
+
+function initFirebase(){
+  if(!firebaseConfigured()){
+    setSyncStatus('⚙️ Falta configurar Firebase', 'var(--amber)');
+    return;
+  }
+  try{
+    const app = firebase.initializeApp(FIREBASE_CONFIG);
+    firebaseAuth = firebase.auth(app);
+    firestore = firebase.firestore(app);
+    firebaseReady = true;
+    setSyncStatus('☁ Firebase listo · conecta un código', 'var(--muted)');
+    if(syncCodeValue) connectSync(syncCodeValue);
+  }catch(e){
+    console.error(e);
+    setSyncStatus('⚠️ Error al iniciar Firebase', 'var(--red)');
+  }
+}
+
+function setSyncStatus(text,color){
+  const el=document.getElementById('syncStatus');
+  if(el){ el.textContent=text; el.style.color=color||'var(--muted)'; }
+}
+
+function normalizeSyncCode(v){
+  return String(v||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,32);
+}
+
+function makeSyncCode(){
+  const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s='';
+  for(let i=0;i<12;i++) s+=chars[Math.floor(Math.random()*chars.length)];
+  return s.slice(0,4)+'-'+s.slice(4,8)+'-'+s.slice(8);
+}
+
+function openSyncModal(){
+  document.getElementById('syncCode').value=syncCodeValue;
+  document.getElementById('disconnectSyncBtn').style.display=syncCodeValue?'block':'none';
+  document.getElementById('syncOv').style.display='flex';
+  setTimeout(()=>document.getElementById('syncCode').focus(),50);
+}
+function closeSyncModal(){ document.getElementById('syncOv').style.display='none'; }
+function generateSyncCode(){
+  document.getElementById('syncCode').value=makeSyncCode();
+}
+
+async function connectSyncFromModal(){
+  const code=normalizeSyncCode(document.getElementById('syncCode').value);
+  if(code.length<10){ toast('El código debe tener al menos 10 caracteres'); return; }
+  await connectSync(code);
+}
+
+async function connectSync(code){
+  if(!firebaseReady){ toast('Primero configura Firebase en este archivo'); return; }
+  code=normalizeSyncCode(code);
+  if(code.length<10){ toast('Código de sincronización inválido'); return; }
+
+  try{
+    setSyncStatus('☁ Conectando…','var(--blue)');
+    if(syncUnsubscribe) syncUnsubscribe();
+
+    await firebaseAuth.signInAnonymously();
+    const ref=firestore.collection('sync').doc(code);
+    const snap=await ref.get();
+
+    if(snap.exists){
+      const remote=normalizeDb(snap.data().db);
+      const localHasData = db.transactions.length || Object.keys(db.budgets).length || db.goals.length || db.salary;
+      const remoteHasData = remote.transactions.length || Object.keys(remote.budgets).length || remote.goals.length || remote.salary;
+
+      if(localHasData && remoteHasData && JSON.stringify(normalizeDb(db))!==JSON.stringify(remote)){
+        const useRemote=confirm('Ya existen datos en la nube para este código.\n\nAceptar = usar los datos de la nube en este dispositivo.\nCancelar = conservar los datos de este dispositivo y subirlos a la nube.');
+        if(useRemote){
+          db=remote;
+        }else{
+          await ref.set({db:db, updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+        }
+      }else{
+        db=remote;
+      }
+    }else{
+      await ref.set({db:db, updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+    }
+
+    localStorage.setItem('misFinanzas_syncCode',code);
+    syncCodeValue=code;
+    cloudLoaded=true;
+    render();
+
+    syncUnsubscribe=ref.onSnapshot(s=>{
+      if(!s.exists) return;
+      const incoming=normalizeDb(s.data().db);
+      if(JSON.stringify(normalizeDb(db))!==JSON.stringify(incoming)){
+        db=incoming;
+        localStorage.setItem(KEY,JSON.stringify(db));
+        render();
+        setSyncStatus('☁ Sincronizado · '+new Date().toLocaleTimeString('es-EC',{hour:'2-digit',minute:'2-digit'}),'var(--green)');
+      }
+    },err=>{
+      console.error(err);
+      setSyncStatus('⚠️ Error de sincronización','var(--red)');
+      toast('No se pudo leer la nube. Revisa las reglas de Firestore.');
+    });
+
+    setSyncStatus('☁ Sincronizado · código '+code.slice(0,4)+'…','var(--green)');
+    closeSyncModal();
+    toast('☁ Sincronización activada');
+  }catch(e){
+    console.error(e);
+    cloudLoaded=false;
+    setSyncStatus('⚠️ No se pudo conectar','var(--red)');
+    toast('Error al conectar. Revisa Firebase, Auth y Firestore.');
+  }
+}
+
+function queueCloudSave(){
+  if(!firebaseReady || !cloudLoaded || !syncCodeValue) return;
+  clearTimeout(cloudSaveTimer);
+  cloudSaveTimer=setTimeout(async()=>{
+    try{
+      cloudSaving=true;
+      const ref=firestore.collection('sync').doc(syncCodeValue);
+      await ref.set({db:db,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+      setSyncStatus('☁ Guardado y sincronizado · '+new Date().toLocaleTimeString('es-EC',{hour:'2-digit',minute:'2-digit'}),'var(--green)');
+    }catch(e){
+      console.error(e);
+      setSyncStatus('⚠️ No se pudo guardar en la nube','var(--red)');
+      toast('No se pudo guardar en la nube');
+    }finally{
+      cloudSaving=false;
+    }
+  },250);
+}
+
+function disconnectSync(){
+  if(syncUnsubscribe){ syncUnsubscribe(); syncUnsubscribe=null; }
+  cloudLoaded=false;
+  syncCodeValue='';
+  localStorage.removeItem('misFinanzas_syncCode');
+  setSyncStatus('☁ Sin sincronización','var(--muted)');
+  closeSyncModal();
+  toast('Sincronización desconectada. Tus datos locales siguen aquí.');
+}
+
+function saveLocalAndCloud(){
+  try{
+    localStorage.setItem(KEY, JSON.stringify(db));
+  }catch(e){
+    toast('No se pudo guardar localmente');
+  }
+  queueCloudSave();
+}
+
 <script>
 /* ══ Estado ══ */
 const KEY = 'misFinanzas_v2';
@@ -750,7 +969,7 @@ function load(){
     return structuredClone(DEF);
   }
 }
-function save(){ try{ localStorage.setItem(KEY, JSON.stringify(db)); }catch(e){ toast('No se pudo guardar (modo preview). Descarga el archivo.'); } }
+function save(){ saveLocalAndCloud(); }
 
 const fmt = n => CUR+(Math.round(n*100)/100).toLocaleString('es-EC',{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmtShort = n => { if(n>=1000) return CUR+(n/1000).toFixed(1)+'k'; return CUR+Math.round(n); };
@@ -1640,6 +1859,7 @@ document.getElementById('fDate').value=new Date().toISOString().slice(0,10);
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeModal(); closeDetail(); closeSalaryModal(); } });
 setType('gasto');
 render();
+initFirebase();
 </script>
 </body>
 </html>
