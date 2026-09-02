@@ -36,6 +36,9 @@
   --teal:     #0D9488;
   --teal-bg:  #F0FDFA;
   --teal-bd:  #99F6E4;
+  --indigo:    #6366F1;
+  --indigo-bg: #EEF2FF;
+  --indigo-bd: #C7D2FE;
 
   --c0:#6366F1; --c1:#10B981; --c2:#EF4444; --c3:#F59E0B; --c4:#06B6D4;
   --c5:#EC4899; --c6:#8B5CF6; --c7:#84CC16; --c8:#F97316; --c9:#3B82F6;
@@ -87,7 +90,7 @@ header.top {
 .month-nav .lbl { min-width: 148px; text-align: center; font-weight: 700; font-size: 14px; color: var(--ink); text-transform: capitalize; }
 
 /* ── SUMMARY CARDS ── */
-.cards { display: grid; grid-template-columns: repeat(6,1fr); gap: 14px; margin-bottom: 24px; }
+.cards { display: grid; grid-template-columns: repeat(7,1fr); gap: 14px; margin-bottom: 24px; }
 .card {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 20px; position: relative;
@@ -115,6 +118,8 @@ header.top {
 .card.save    .card-icon { background: var(--purple-bg); }
 .card.pending .card-icon { background: var(--amber-bg); }
 .card.realsavings .card-icon { background: var(--teal-bg); }
+.card.salary .card-icon { background: var(--indigo-bg); }
+.card.salary .value { color: var(--indigo); }
 .card.balance .value { color: var(--ink); }
 .card.income  .value { color: var(--green); }
 .card.expense .value { color: var(--red); }
@@ -331,7 +336,7 @@ canvas { display: block; }
 
 /* ── RESPONSIVE ── */
 @media (max-width: 960px) {
-  .cards { grid-template-columns: repeat(3,1fr); }
+  .cards { grid-template-columns: repeat(4,1fr); }
   .grid  { grid-template-columns: 1fr; }
   .charts{ grid-template-columns: 1fr; }
 }
@@ -369,6 +374,15 @@ canvas { display: block; }
 
   <!-- TARJETAS RESUMEN -->
   <div class="cards">
+    <div class="card salary clickable" onclick="openSalaryModal()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openSalaryModal();}" tabindex="0" role="button">
+      <div class="card-head">
+        <div class="card-icon">💼</div>
+        <span class="card-badge" id="salaryBadge"></span>
+      </div>
+      <div class="label">Mi sueldo mensual</div>
+      <div class="value num" id="cSalary">$0.00</div>
+      <div class="insight" id="cSalarySub">Toca para ingresar tu sueldo y ver cuánto te queda.</div>
+    </div>
     <div class="card balance clickable" onclick="openSummaryDetail('balance')" onkeydown="cardKey(event,'balance')" tabindex="0" role="button">
       <div class="card-head">
         <div class="card-icon">💼</div>
@@ -655,6 +669,22 @@ canvas { display: block; }
   </div>
 </div>
 
+<!-- MODAL SUELDO -->
+<div id="salaryOv" onclick="if(event.target.id==='salaryOv')closeSalaryModal()" style="position:fixed;inset:0;background:rgba(15,23,42,.4);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:65;padding:18px">
+  <div class="modal">
+    <h3>💼 Mi sueldo mensual</h3>
+    <div class="field">
+      <label>Monto</label>
+      <input class="amt num" id="eSalaryAmount" type="number" inputmode="decimal" placeholder="0.00" step="0.01" min="0">
+    </div>
+    <div class="insight" style="margin-bottom:4px">Se usa cada mes para calcular cuánto te queda frente a tus gastos e ingresos reportados.</div>
+    <div class="mbtns">
+      <button class="mdel" onclick="closeSalaryModal()">Cancelar</button>
+      <button class="msave" onclick="saveSalary()">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL DETALLE DE GRÁFICA -->
 <div id="detailOv">
   <div class="detail-modal">
@@ -685,6 +715,7 @@ const DEF = {
   transactions: [],
   budgets: {},
   goals: [],
+  salary: 0,
   categories: {
     gasto:   ['Alimentación','Transporte','Vivienda','Servicios','Salud','Ocio','Educación','Ropa','Otros'],
     ingreso: ['Sueldo','Negocio','Ventas','Inversión','Regalo','Otros']
@@ -757,6 +788,7 @@ function paymentStatusText(t){
 }
 function normalizeDb(data){
   const next=Object.assign(structuredClone(DEF), data||{});
+  next.salary = (typeof next.salary==='number' && !isNaN(next.salary) && next.salary>=0) ? next.salary : 0;
   next.transactions=(next.transactions||[]).map(t=>{
     const method=normalizeMethod(t.method);
     return Object.assign({}, t, {
@@ -900,6 +932,38 @@ function render(){
   const pmTx=txInMonth(pmDate);
   const pmInc=sum(pmTx,'ingreso'), pmExp=sum(pmTx,'gasto');
   const pmNet=pmInc-pmExp;
+
+  // Sueldo y disponible del mes
+  const salary=db.salary||0;
+  const available=salary+inc-exp;
+  const cSalaryEl=document.getElementById('cSalary');
+  cSalaryEl.textContent=fmt(available);
+  cSalaryEl.style.color = available>=0?'var(--indigo)':'var(--red)';
+  const salaryBadge=document.getElementById('salaryBadge');
+  let salarySub='';
+  if(salary===0){
+    salaryBadge.textContent='Sin definir';
+    salaryBadge.style.cssText='background:var(--bg);color:var(--muted);border:1px solid var(--border)';
+    salarySub = (inc===0 && exp===0)
+      ? 'Toca para ingresar tu sueldo y ver cuánto te queda cada mes.'
+      : `Aún no defines tu sueldo. Con ${fmt(inc)} en ingresos y ${fmt(exp)} en gastos este mes, tu disponible es <strong>${fmt(available)}</strong>. Toca para configurarlo.`;
+  } else {
+    const base=salary+inc, pctUsed=base>0?Math.round(exp/base*100):0;
+    if(available>=0){
+      salaryBadge.textContent=pctUsed+'% usado';
+      salaryBadge.style.cssText = pctUsed>=90
+        ? 'background:var(--amber-bg);color:#B45309;border:1px solid #FDE68A'
+        : 'background:var(--indigo-bg);color:var(--indigo);border:1px solid var(--indigo-bd)';
+      salarySub = inc>0
+        ? `De tu sueldo de ${fmt(salary)} + ${fmt(inc)} en otros ingresos, llevas gastado ${fmt(exp)}. Te quedan <strong>${fmt(available)}</strong> este mes.`
+        : `De tu sueldo de ${fmt(salary)}, llevas gastado ${fmt(exp)}. Te quedan <strong>${fmt(available)}</strong> este mes.`;
+    } else {
+      salaryBadge.textContent='Excedido';
+      salaryBadge.style.cssText='background:var(--red-bg);color:var(--red);border:1px solid var(--red-bd)';
+      salarySub=`🚨 Superaste tu sueldo${inc>0?' + ingresos':''} por <strong>${fmt(Math.abs(available))}</strong> este mes.`;
+    }
+  }
+  document.getElementById('cSalarySub').innerHTML=salarySub;
 
   // Balance
   const cBal=document.getElementById('cBalance');
@@ -1550,6 +1614,20 @@ function loadDemo(){
 }
 function wipe(){ if(confirm('¿Seguro? Esto borra todos tus movimientos, presupuestos y metas.')){ db=structuredClone(DEF); selectedSlice={chart:null,category:null}; closeDetail(); save(); render(); toast('🗑 Todo borrado'); } }
 
+/* ══ Sueldo mensual ══ */
+function openSalaryModal(){
+  document.getElementById('eSalaryAmount').value = db.salary || '';
+  document.getElementById('salaryOv').style.display='flex';
+  setTimeout(()=>document.getElementById('eSalaryAmount').focus(),50);
+}
+function closeSalaryModal(){ document.getElementById('salaryOv').style.display='none'; }
+function saveSalary(){
+  const v=parseFloat(document.getElementById('eSalaryAmount').value);
+  db.salary = (isNaN(v)||v<0) ? 0 : v;
+  save(); closeSalaryModal(); render();
+  toast('💼 Sueldo actualizado');
+}
+
 /* ══ Toast ══ */
 function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),2800); }
 
@@ -1559,7 +1637,7 @@ document.getElementById('nextM').onclick=()=>{ viewDate=new Date(viewDate.getFul
 document.getElementById('ov').onclick=e=>{ if(e.target.id==='ov') closeModal(); };
 document.getElementById('detailOv').onclick=e=>{ if(e.target.id==='detailOv') closeDetail(); };
 document.getElementById('fDate').value=new Date().toISOString().slice(0,10);
-document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeModal(); closeDetail(); } });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeModal(); closeDetail(); closeSalaryModal(); } });
 setType('gasto');
 render();
 </script>
