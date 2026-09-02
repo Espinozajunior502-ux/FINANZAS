@@ -90,7 +90,7 @@ header.top {
 .month-nav .lbl { min-width: 148px; text-align: center; font-weight: 700; font-size: 14px; color: var(--ink); text-transform: capitalize; }
 
 /* ── SUMMARY CARDS ── */
-.cards { display: grid; grid-template-columns: repeat(7,1fr); gap: 14px; margin-bottom: 24px; }
+.cards { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 14px; margin-bottom: 24px; }
 .card {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 20px; position: relative;
@@ -335,17 +335,74 @@ canvas { display: block; }
 .goal-ring-wrap { display: flex; align-items: center; gap: 14px; }
 
 /* ── RESPONSIVE ── */
+button, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+@media (max-width: 1100px) {
+  .cards { grid-template-columns: repeat(3, minmax(0,1fr)); }
+}
 @media (max-width: 960px) {
-  .cards { grid-template-columns: repeat(4,1fr); }
   .grid  { grid-template-columns: 1fr; }
   .charts{ grid-template-columns: 1fr; }
+  .wrap { max-width: 760px; }
 }
-@media (max-width: 520px) {
-  .cards { grid-template-columns: 1fr 1fr; gap: 10px; }
-  .card .value { font-size: 22px; }
+@media (max-width: 700px) {
+  body { padding: 12px 10px 76px; overflow-x: hidden; }
+  .wrap { width: 100%; }
+  header.top { gap: 12px; margin-bottom: 18px; align-items: stretch; }
+  .brand { min-width: 0; flex: 1; }
+  .brand-icon { width: 40px; height: 40px; flex-shrink: 0; }
+  .brand-text h1 { font-size: 18px; }
+  .brand-text p { font-size: 11px; line-height: 1.35; }
+  .month-nav { width: 100%; justify-content: space-between; }
+  .month-nav .lbl { flex: 1; min-width: 0; font-size: 13px; }
+  .cards { grid-template-columns: repeat(2, minmax(0,1fr)); gap: 9px; margin-bottom: 14px; }
+  .card { padding: 14px; border-radius: 13px; min-width: 0; }
+  .card-head { margin-bottom: 10px; }
+  .card-icon { width: 34px; height: 34px; font-size: 15px; }
+  .card .label { font-size: 10px; letter-spacing: .35px; }
+  .card .value { font-size: 20px; letter-spacing: -.5px; }
+  .card .insight { font-size: 10px; line-height: 1.35; }
+  .card.clickable::after { right: 10px; bottom: 8px; font-size: 17px; }
+  .panel { padding: 15px; border-radius: 13px; }
+  .panel-head { margin-bottom: 14px; }
+  .panel-head h2 { font-size: 14px; }
+  .panel-head .badge { font-size: 9px; padding: 3px 7px; }
+  .row2 { grid-template-columns: 1fr; gap: 0; }
+  .field input, .field select, .field textarea { font-size: 16px; min-height: 44px; }
+  .seg button { min-height: 44px; }
+  .btn { min-height: 46px; }
+  .tools { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .tools input { grid-column: 1 / -1; min-width: 0; width: 100%; }
+  .tools select { min-width: 0; width: 100%; }
+  .txr { gap: 9px; padding: 11px 4px; align-items: flex-start; }
+  .txr .ic { width: 36px; height: 36px; font-size: 16px; }
+  .txr .meta .d { font-size: 12px; }
+  .txr .meta .s { font-size: 10px; }
+  .txr .amt { font-size: 12px; padding-top: 2px; }
+  .charts { gap: 12px; margin-bottom: 12px; }
+  .donut-wrap { gap: 10px; }
+  .legend { min-width: 0; }
+  .legend .nm { font-size: 11px; }
+  .legend .lamt, .legend .pct { font-size: 10px; }
+  .bars-wrap { padding-left: 30px; overflow: hidden; }
+  .bars-wrap canvas { width: 100% !important; height: auto !important; }
+  .foot { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 18px; }
+  .foot button { width: 100%; padding: 10px 8px; font-size: 11px; }
+  #syncStatus { padding: 0 8px; line-height: 1.4; }
+  .modal, .detail-modal { padding: 17px; border-radius: 14px; max-height: 92vh; }
+  .modal .mbtns { flex-direction: column-reverse; }
+  .modal .mbtns button { width: 100%; min-height: 44px; }
   .detail-stats { grid-template-columns: 1fr; }
-  body { padding: 14px 12px 70px; }
+  .detail-tx .damt { font-size: 12px; }
 }
+@media (max-width: 420px) {
+  .cards { grid-template-columns: 1fr 1fr; }
+  .card { padding: 12px; }
+  .card .value { font-size: 18px; }
+  .donut-wrap { align-items: flex-start; }
+  .donut-wrap > .chart-container { transform: scale(.88); transform-origin: top left; margin-right: -18px; margin-bottom: -18px; }
+  .foot { grid-template-columns: 1fr; }
+}
+
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg); border-radius: 6px; }
 ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 6px; }
@@ -374,25 +431,7 @@ canvas { display: block; }
 
   <!-- TARJETAS RESUMEN -->
   <div class="cards">
-    <div class="card salary clickable" onclick="openSalaryModal()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openSalaryModal();}" tabindex="0" role="button">
-      <div class="card-head">
-        <div class="card-icon">💼</div>
-        <span class="card-badge" id="salaryBadge"></span>
-      </div>
-      <div class="label">Mi sueldo mensual</div>
-      <div class="value num" id="cSalary">$0.00</div>
-      <div class="insight" id="cSalarySub">Toca para ingresar tu sueldo y ver cuánto te queda.</div>
-    </div>
-    <div class="card balance clickable" onclick="openSummaryDetail('balance')" onkeydown="cardKey(event,'balance')" tabindex="0" role="button">
-      <div class="card-head">
-        <div class="card-icon">💼</div>
-        <span class="card-badge" id="balanceBadge"></span>
-      </div>
-      <div class="label">Balance total</div>
-      <div class="value num" id="cBalance">$0.00</div>
-      <div class="insight" id="cBalanceSub">Acumulado de todos tus movimientos.</div>
-    </div>
-    <div class="card realsavings clickable" onclick="openSummaryDetail('realsavings')" onkeydown="cardKey(event,'realsavings')" tabindex="0" role="button">
+<div class="card realsavings clickable" onclick="openSummaryDetail('realsavings')" onkeydown="cardKey(event,'realsavings')" tabindex="0" role="button">
       <div class="card-head">
         <div class="card-icon">🧮</div>
         <span class="card-badge" id="realSavingsBadge"></span>
@@ -1151,53 +1190,9 @@ function render(){
   const pmInc=sum(pmTx,'ingreso'), pmExp=sum(pmTx,'gasto');
   const pmNet=pmInc-pmExp;
 
-  // Sueldo y disponible del mes
+  // Sueldo y disponible del mes (se mantiene para la lógica de la aplicación)
   const salary=db.salary||0;
   const available=salary+inc-exp;
-  const cSalaryEl=document.getElementById('cSalary');
-  cSalaryEl.textContent=fmt(available);
-  cSalaryEl.style.color = available>=0?'var(--indigo)':'var(--red)';
-  const salaryBadge=document.getElementById('salaryBadge');
-  let salarySub='';
-  if(salary===0){
-    salaryBadge.textContent='Sin definir';
-    salaryBadge.style.cssText='background:var(--bg);color:var(--muted);border:1px solid var(--border)';
-    salarySub = (inc===0 && exp===0)
-      ? 'Toca para ingresar tu sueldo y ver cuánto te queda cada mes.'
-      : `Aún no defines tu sueldo. Con ${fmt(inc)} en ingresos y ${fmt(exp)} en gastos este mes, tu disponible es <strong>${fmt(available)}</strong>. Toca para configurarlo.`;
-  } else {
-    const base=salary+inc, pctUsed=base>0?Math.round(exp/base*100):0;
-    if(available>=0){
-      salaryBadge.textContent=pctUsed+'% usado';
-      salaryBadge.style.cssText = pctUsed>=90
-        ? 'background:var(--amber-bg);color:#B45309;border:1px solid #FDE68A'
-        : 'background:var(--indigo-bg);color:var(--indigo);border:1px solid var(--indigo-bd)';
-      salarySub = inc>0
-        ? `De tu sueldo de ${fmt(salary)} + ${fmt(inc)} en otros ingresos, llevas gastado ${fmt(exp)}. Te quedan <strong>${fmt(available)}</strong> este mes.`
-        : `De tu sueldo de ${fmt(salary)}, llevas gastado ${fmt(exp)}. Te quedan <strong>${fmt(available)}</strong> este mes.`;
-    } else {
-      salaryBadge.textContent='Excedido';
-      salaryBadge.style.cssText='background:var(--red-bg);color:var(--red);border:1px solid var(--red-bd)';
-      salarySub=`🚨 Superaste tu sueldo${inc>0?' + ingresos':''} por <strong>${fmt(Math.abs(available))}</strong> este mes.`;
-    }
-  }
-  document.getElementById('cSalarySub').innerHTML=salarySub;
-
-  // Balance
-  const cBal=document.getElementById('cBalance');
-  cBal.textContent=fmt(balance);
-  cBal.style.color = balance>=0?'var(--blue)':'var(--red)';
-  const balBadge=document.getElementById('balanceBadge');
-  if(balance>0){ balBadge.textContent='Positivo'; balBadge.style.cssText='background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd)'; }
-  else if(balance<0){ balBadge.textContent='Negativo'; balBadge.style.cssText='background:var(--red-bg);color:var(--red);border:1px solid var(--red-bd)'; }
-  else { balBadge.textContent='En cero'; balBadge.style.cssText='background:var(--bg);color:var(--muted);border:1px solid var(--border)'; }
-
-  const totalIngresos=db.transactions.filter(t=>t.type==='ingreso').reduce((a,b)=>a+b.amount,0);
-  const totalGastos=db.transactions.filter(t=>t.type==='gasto').reduce((a,b)=>a+b.amount,0);
-  const allPending=db.transactions.filter(isPending).reduce((a,b)=>a+b.amount,0);
-  document.getElementById('cBalanceSub').innerHTML = balance>=0
-    ? `<strong>${fmt(totalIngresos)}</strong> ingresado · <strong>${fmt(totalGastos)}</strong> gastado · <strong>${fmt(allPending)}</strong> pendiente.`
-    : `⚠️ Gastos superan ingresos por <strong>${fmt(Math.abs(balance))}</strong>.`;
 
   // Ahorro real (mes pasado + este mes)
   const realSavings=pmNet+net;
