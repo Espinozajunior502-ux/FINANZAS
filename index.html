@@ -1723,7 +1723,7 @@ tbody td:last-child{border-radius:0 15px 15px 0!important}
         </div>
         <div class="field">
           <label>Monto</label>
-          <input class="amt num" id="fAmount" type="number" inputmode="decimal" placeholder="0.00" step="0.01" min="0">
+          <input class="amt num" id="fAmount" type="text" inputmode="decimal" placeholder="0,00" step="0.01" min="0">
         </div>
         <div class="field">
           <label>Categoría</label>
@@ -1768,7 +1768,7 @@ tbody td:last-child{border-radius:0 15px 15px 0!important}
         <div id="budgetList"></div>
         <div class="addrow">
           <select id="bCat"></select>
-          <input id="bAmt" type="number" placeholder="Límite $" min="0">
+          <input id="bAmt" type="text" placeholder="Límite $" min="0">
           <button onclick="addBudget()" title="Guardar presupuesto">+</button>
         </div>
       </div>
@@ -1781,7 +1781,7 @@ tbody td:last-child{border-radius:0 15px 15px 0!important}
         <div id="goalList"></div>
         <div class="addrow">
           <input id="gName" type="text" placeholder="Nombre de la meta">
-          <input id="gTarget" type="number" placeholder="Objetivo $" min="0" style="max-width:100px">
+          <input id="gTarget" type="text" placeholder="Objetivo $" min="0" style="max-width:100px">
           <button onclick="addGoal()" title="Crear meta">+</button>
         </div>
       </div>
@@ -1940,7 +1940,7 @@ tbody td:last-child{border-radius:0 15px 15px 0!important}
 <div id="ov">
   <div class="modal">
     <h3>✏️ Editar movimiento</h3>
-    <div class="field"><label>Monto</label><input class="num" id="eAmount" type="number" step="0.01"></div>
+    <div class="field"><label>Monto</label><input class="num" id="eAmount" type="text" step="0.01"></div>
     <div class="field"><label>Categoría</label><select id="eCategory"></select></div>
     <div class="field"><label>Fecha</label><input id="eDate" type="date"></div>
     <div class="field" id="eCardTypeWrap" style="display:none">
@@ -1971,7 +1971,7 @@ tbody td:last-child{border-radius:0 15px 15px 0!important}
     <h3>💼 Mi sueldo mensual</h3>
     <div class="field">
       <label>Monto</label>
-      <input class="amt num" id="eSalaryAmount" type="number" inputmode="decimal" placeholder="0.00" step="0.01" min="0">
+      <input class="amt num" id="eSalaryAmount" type="text" inputmode="decimal" placeholder="0,00" step="0.01" min="0">
     </div>
     <div class="insight" style="margin-bottom:4px">Se usa cada mes para calcular cuánto te queda frente a tus gastos e ingresos reportados.</div>
     <div class="mbtns">
@@ -2325,9 +2325,32 @@ function fillCats(id, type){
   if([...s.options].some(o=>o.value===cur)) s.value=cur;
 }
 
+/* ══ Formato monetario Ecuador ══ */
+function parseMoneyInput(value){
+  let s=String(value??'').trim().replace(/\s/g,'');
+  if(!s) return NaN;
+  if(s.includes(',') && s.includes('.')){
+    if(s.lastIndexOf(',')>s.lastIndexOf('.')) s=s.replace(/\./g,'').replace(',','.');
+    else s=s.replace(/,/g,'');
+  }else if(s.includes(',')){
+    s=s.replace(/\./g,'').replace(',','.');
+  }
+  return parseFloat(s);
+}
+function formatMoneyInput(value){
+  const n=Number(value);
+  return Number.isFinite(n)?n.toLocaleString('es-EC',{minimumFractionDigits:2,maximumFractionDigits:2}):'';
+}
+function setupMoneyInputs(){
+  ['fAmount','eAmount','bAmt','gTarget','eSalaryAmount'].forEach(id=>{
+    const el=document.getElementById(id); if(!el)return;
+    el.addEventListener('blur',()=>{const n=parseMoneyInput(el.value);if(Number.isFinite(n))el.value=formatMoneyInput(n);});
+    el.addEventListener('focus',()=>{const n=parseMoneyInput(el.value);if(Number.isFinite(n))el.value=String(n).replace('.',',');});
+  });
+}
 /* ══ CRUD ══ */
 function addTx(){
-  const amt=parseFloat(document.getElementById('fAmount').value);
+  const amt=parseMoneyInput(document.getElementById('fAmount').value);
   if(!amt||amt<=0){ toast('Ingresa un monto válido'); return; }
   const method=document.getElementById('fMethod').value;
   const tx={
@@ -2348,7 +2371,7 @@ function addTx(){
 function openEdit(id){
   editingId=id; const t=db.transactions.find(x=>x.id===id); if(!t)return;
   fillCats('eCategory', t.type);
-  document.getElementById('eAmount').value=t.amount;
+  document.getElementById('eAmount').value=formatMoneyInput(t.amount);
   document.getElementById('eCategory').value=t.category;
   document.getElementById('eDate').value=t.date;
   document.getElementById('eDesc').value=t.desc||'';
@@ -2361,7 +2384,7 @@ function openEdit(id){
 }
 function saveEdit(){
   const t=db.transactions.find(x=>x.id===editingId); if(!t)return;
-  t.amount=parseFloat(document.getElementById('eAmount').value)||t.amount;
+  t.amount=parseMoneyInput(document.getElementById('eAmount').value)||t.amount;
   t.category=document.getElementById('eCategory').value;
   t.date=document.getElementById('eDate').value;
   t.desc=document.getElementById('eDesc').value.trim();
@@ -2379,7 +2402,7 @@ function closeModal(){ document.getElementById('ov').classList.remove('show'); e
 
 /* ══ Presupuestos ══ */
 function addBudget(){
-  const c=document.getElementById('bCat').value, a=parseFloat(document.getElementById('bAmt').value);
+  const c=document.getElementById('bCat').value, a=parseMoneyInput(document.getElementById('bAmt').value);
   if(!a||a<=0){ toast('Define un límite válido'); return; }
   db.budgets[c]=a; save(); document.getElementById('bAmt').value=''; render(); toast('📊 Presupuesto guardado');
 }
@@ -2387,7 +2410,7 @@ function delBudget(c){ delete db.budgets[c]; save(); render(); }
 
 /* ══ Metas ══ */
 function addGoal(){
-  const n=document.getElementById('gName').value.trim(), t=parseFloat(document.getElementById('gTarget').value);
+  const n=document.getElementById('gName').value.trim(), t=parseMoneyInput(document.getElementById('gTarget').value);
   if(!n||!t||t<=0){ toast('Completa nombre y objetivo'); return; }
   db.goals.push({id:Date.now()+'',name:n,target:t,saved:0}); save();
   document.getElementById('gName').value=''; document.getElementById('gTarget').value=''; render(); toast('🏆 Meta creada');
@@ -2395,7 +2418,7 @@ function addGoal(){
 function goalAdd(id){
   const g=db.goals.find(x=>x.id===id); if(!g)return;
   const v=prompt('¿Cuánto agregar a "'+g.name+'"? (negativo para restar)','');
-  if(v===null)return; const n=parseFloat(v); if(isNaN(n))return;
+  if(v===null)return; const n=parseMoneyInput(v); if(isNaN(n))return;
   g.saved=Math.max(0,g.saved+n); save(); render();
 }
 function delGoal(id){ db.goals=db.goals.filter(x=>x.id!==id); save(); render(); }
@@ -3061,13 +3084,13 @@ function wipe(){ if(confirm('¿Seguro? Esto borra todos tus movimientos, presupu
 
 /* ══ Sueldo mensual ══ */
 function openSalaryModal(){
-  document.getElementById('eSalaryAmount').value = db.salary || '';
+  document.getElementById('eSalaryAmount').value = db.salary ? formatMoneyInput(db.salary) : '';
   document.getElementById('salaryOv').style.display='flex';
   setTimeout(()=>document.getElementById('eSalaryAmount').focus(),50);
 }
 function closeSalaryModal(){ document.getElementById('salaryOv').style.display='none'; }
 function saveSalary(){
-  const v=parseFloat(document.getElementById('eSalaryAmount').value);
+  const v=parseMoneyInput(document.getElementById('eSalaryAmount').value);
   db.salary = (isNaN(v)||v<0) ? 0 : v;
   save(); closeSalaryModal(); render();
   toast('💼 Sueldo actualizado');
@@ -3434,7 +3457,7 @@ initFirebase();
   window.render=function(){const r=baseRender?baseRender.apply(this,arguments):undefined;if(window.matchMedia('(max-width:700px)').matches)setTimeout(refresh,0);return r}
   $('#v5Search')?.addEventListener('input',renderMoves);$$('[data-v5-filter]').forEach(b=>b.addEventListener('click',()=>{$$('[data-v5-filter]').forEach(x=>x.classList.remove('active'));b.classList.add('active');filter=b.dataset.v5Filter;renderMoves()}));
   window.addEventListener('popstate',()=>{let s=location.hash.replace('#','')||'home';if(!['home','moves','add','analysis','more','plan','detail','catdetail'].includes(s))s='home';current=s;$$('.v5-screen').forEach(x=>x.classList.toggle('active',x.dataset.v5===s));setNav(s);refresh()});
-  document.addEventListener('DOMContentLoaded',()=>{if(!window.matchMedia('(max-width:700px)').matches)return;movePanels();if(location.hash&&['home','moves','add','analysis','more','plan','detail','catdetail'].includes(location.hash.slice(1)))current=location.hash.slice(1);$$('.v5-screen').forEach(s=>s.classList.toggle('active',s.dataset.v5===current));setNav(current);setTimeout(refresh,60)});
+  document.addEventListener('DOMContentLoaded',()=>{setupMoneyInputs();if(!window.matchMedia('(max-width:700px)').matches)return;movePanels();if(location.hash&&['home','moves','add','analysis','more','plan','detail','catdetail'].includes(location.hash.slice(1)))current=location.hash.slice(1);$$('.v5-screen').forEach(s=>s.classList.toggle('active',s.dataset.v5===current));setNav(current);setTimeout(refresh,60)});
 })();
 </script>
 
