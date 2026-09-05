@@ -1622,6 +1622,25 @@ tbody td:last-child{border-radius:0 15px 15px 0!important}
 @media(min-width:701px){.native-v5{display:none!important}}
 </style>
 
+
+<style id="v5-nav-autohide">
+@media (max-width:700px){
+  .v5-bottom{
+    transform:translateY(0);
+    opacity:1;
+    transition:transform .32s cubic-bezier(.22,.8,.24,1),opacity .22s ease,box-shadow .22s ease;
+    will-change:transform,opacity;
+  }
+  .v5-bottom.v5-nav-hidden{
+    transform:translateY(calc(100% + 18px));
+    opacity:0;
+    pointer-events:none;
+  }
+}
+@media (prefers-reduced-motion:reduce){
+  .v5-bottom{transition:none!important}
+}
+</style>
 </head>
 <body>
 <div class="wrap">
@@ -3419,5 +3438,67 @@ initFirebase();
 })();
 </script>
 
+
+<script id="v5-nav-autohide-js">
+(function(){
+  const nav=document.querySelector('.v5-bottom');
+  if(!nav) return;
+  let lastY=window.scrollY||0;
+  let touchStartY=null;
+  let ticking=false;
+  let revealTimer=null;
+  const mobile=()=>window.matchMedia('(max-width:700px)').matches;
+  function showNav(){
+    if(!mobile()) return;
+    nav.classList.remove('v5-nav-hidden');
+    clearTimeout(revealTimer);
+    revealTimer=setTimeout(()=>{
+      if((window.scrollY||0)>80) hideNav();
+    },2400);
+  }
+  function hideNav(){
+    if(!mobile()) return;
+    nav.classList.add('v5-nav-hidden');
+  }
+  function handleScroll(){
+    ticking=false;
+    if(!mobile()){nav.classList.remove('v5-nav-hidden');return;}
+    const y=window.scrollY||0;
+    const delta=y-lastY;
+    if(y<35){ showNav(); }
+    else if(delta>7){ hideNav(); }
+    else if(delta<-7){ showNav(); }
+    lastY=y;
+  }
+  window.addEventListener('scroll',()=>{
+    if(!ticking){ticking=true;requestAnimationFrame(handleScroll)}
+  },{passive:true});
+  window.addEventListener('touchstart',e=>{
+    if(!mobile()) return;
+    touchStartY=e.touches?.[0]?.clientY??null;
+    showNav();
+  },{passive:true});
+  window.addEventListener('touchend',e=>{
+    if(!mobile() || touchStartY===null) return;
+    const endY=e.changedTouches?.[0]?.clientY??touchStartY;
+    const dy=endY-touchStartY;
+    if(dy<-18) showNav();
+    else if(dy>24 && window.scrollY>60) hideNav();
+    touchStartY=null;
+  },{passive:true});
+  window.addEventListener('pointerdown',e=>{
+    if(!mobile() || e.pointerType==='mouse') return;
+    showNav();
+  },{passive:true});
+  window.addEventListener('resize',()=>{
+    if(!mobile()){nav.classList.remove('v5-nav-hidden');clearTimeout(revealTimer);}
+    else if(window.scrollY<35) showNav();
+  },{passive:true});
+  document.addEventListener('visibilitychange',()=>{
+    if(!document.hidden && mobile()) showNav();
+  });
+  showNav();
+})();
+</script>
 </body>
 </html>
